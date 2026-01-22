@@ -495,7 +495,6 @@ const styles = {
     borderRadius: '12px',
     background: '#fff',
   },
-  // eslint-disable-next-line no-dupe-keys
   orderCardInfo: {
     flex: 1,
   },

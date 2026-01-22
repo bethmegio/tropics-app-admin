@@ -1,195 +1,318 @@
-// Sidebar.js - Admin sidebar component
+// src/admin/Sidebar.js
 import React from 'react';
-import { FaCalendarAlt, FaBoxOpen, FaSignOutAlt, FaTachometerAlt, FaUsers, FaChartLine, FaCog, FaShoppingBag, FaTools, FaUserCog } from 'react-icons/fa';
+import { 
+  FaTachometerAlt, 
+  FaUsers, 
+  FaShoppingBag, 
+  FaWrench, 
+  FaChartLine, 
+  FaBoxOpen, 
+  FaCalendarAlt, 
+  FaCog, 
+  FaSignOutAlt,
+  FaBars,
+  FaTimes,
+  FaBell,
+  FaShoppingCart
+} from 'react-icons/fa';
 
-const styles = {
-  sidebar: {
-    background: 'linear-gradient(180deg, #023e8a 0%, #0077b6 100%)',
-    color: '#fff',
-    display: 'flex',
-    flexDirection: 'column',
-    position: 'fixed',
-    height: '100vh',
-    left: 0,
-    top: 0,
-    zIndex: 1000,
-    boxShadow: '2px 0 10px rgba(0,0,0,0.1)',
-    transition: 'width 0.3s ease',
-  },
-  sidebarHeader: {
-    padding: '25px 20px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottom: '1px solid rgba(255,255,255,0.1)',
-  },
-  logo: {
-    fontSize: 20,
-    fontWeight: 700,
-    margin: 0,
-    color: '#fff',
-  },
-  toggleButton: {
-    background: 'rgba(255,255,255,0.1)',
-    border: 'none',
-    color: '#fff',
-    borderRadius: '6px',
-    padding: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
-  },
-  nav: {
-    flex: 1,
-    padding: '20px 0',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-  },
-  navButton: {
-    display: 'flex',
-    alignItems: 'center',
-    color: '#fff',
-    padding: '15px 20px',
-    border: 'none',
-    borderRadius: '0',
-    width: '100%',
-    fontSize: '15px',
-    cursor: 'pointer',
-    textAlign: 'left',
-    transition: 'all 0.3s ease',
-    fontWeight: '500',
-    position: 'relative',
-  },
-  notificationBadge: {
-    position: 'absolute',
-    right: '20px',
-    background: '#ef4444',
-    color: 'white',
-    borderRadius: '10px',
-    minWidth: '20px',
-    height: '20px',
-    fontSize: '12px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontWeight: 'bold',
-  },
-  sidebarFooter: {
-    padding: '20px',
-    borderTop: '1px solid rgba(255,255,255,0.1)',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '15px',
-  },
-  userInfo: {
-    padding: '15px',
-    background: 'rgba(255,255,255,0.1)',
-    borderRadius: '8px',
-    display: 'flex',
-    alignItems: 'center',
-  },
-  userAvatar: {
-    width: '40px',
-    height: '40px',
-    borderRadius: '50%',
-    background: 'rgba(255,255,255,0.2)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: '12px',
-  },
-  userEmail: {
-    margin: '0 0 5px 0',
-    fontSize: '14px',
-    fontWeight: '500',
-  },
-  userRole: {
-    margin: 0,
-    fontSize: '12px',
-    color: '#90e0ef',
-  },
-  logoutButton: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '12px',
-    borderRadius: '8px',
-    background: '#ef4444',
-    border: 'none',
-    color: 'white',
-    cursor: 'pointer',
-    fontSize: '15px',
-    fontWeight: '500',
-  },
-};
-
-export default function Sidebar({ sidebarOpen, activePage, pendingCount, pendingOrdersCount, user, onToggle, onNavigate, onLogout }) {
+const Sidebar = ({ 
+  sidebarOpen, 
+  activePage, 
+  pendingCount, 
+  pendingOrdersCount, 
+  user, 
+  onToggle, 
+  onNavigate, 
+  onLogout 
+}) => {
   const menuItems = [
-    { key: 'dashboard', icon: <FaTachometerAlt />, label: 'Dashboard' },
-    { key: 'sales', icon: <FaChartLine />, label: 'Sales Management' },
-    { key: 'inventory', icon: <FaBoxOpen />, label: 'Inventory Management' },
-    { key: 'service-scheduling', icon: <FaCalendarAlt />, label: 'Service Scheduling' },
-    { key: 'orders', icon: <FaShoppingBag />, label: 'Orders', badge: pendingOrdersCount },
-    { key: 'users', icon: <FaUsers />, label: 'Users' },
-    { key: 'products', icon: <FaShoppingBag />, label: 'Products' },
-    { key: 'services', icon: <FaTools />, label: 'Services' },
-    { key: 'settings', icon: <FaCog />, label: 'Settings' },
+    { id: 'dashboard', label: 'Dashboard', icon: <FaTachometerAlt /> },
+    { id: 'users', label: 'User Management', icon: <FaUsers /> },
+    { id: 'products', label: 'Products', icon: <FaShoppingBag /> },
+    { id: 'services', label: 'Services', icon: <FaWrench /> },
+    { id: 'sales', label: 'Sales', icon: <FaChartLine /> },
+    { id: 'inventory', label: 'Inventory', icon: <FaBoxOpen /> },
+    { id: 'service-scheduling', label: 'Service Scheduling', icon: <FaCalendarAlt /> },
+    { id: 'settings', label: 'Settings', icon: <FaCog /> },
   ];
 
+  const styles = {
+    sidebar: {
+      position: 'fixed',
+      left: 0,
+      top: 0,
+      height: '100vh',
+      background: 'linear-gradient(180deg, #023e8a 0%, #0077b6 100%)',
+      width: sidebarOpen ? '280px' : '80px',
+      transition: 'width 0.3s ease',
+      zIndex: 1000,
+      boxShadow: '2px 0 10px rgba(0,0,0,0.1)',
+      display: 'flex',
+      flexDirection: 'column',
+      color: 'white',
+    },
+    sidebarHeader: {
+      padding: '20px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      borderBottom: '1px solid rgba(255,255,255,0.1)',
+    },
+    toggleButton: {
+      background: 'rgba(255,255,255,0.1)',
+      border: 'none',
+      color: 'white',
+      width: '40px',
+      height: '40px',
+      borderRadius: '8px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      cursor: 'pointer',
+      fontSize: '18px',
+    },
+    logo: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      opacity: sidebarOpen ? 1 : 0,
+      transition: 'opacity 0.3s ease',
+      whiteSpace: 'nowrap',
+    },
+    logoText: {
+      fontSize: '20px',
+      fontWeight: '700',
+    },
+    userInfo: {
+      padding: '20px',
+      borderBottom: '1px solid rgba(255,255,255,0.1)',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+    },
+    userAvatar: {
+      width: '40px',
+      height: '40px',
+      borderRadius: '50%',
+      background: 'rgba(255,255,255,0.2)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontWeight: '600',
+    },
+    userDetails: {
+      opacity: sidebarOpen ? 1 : 0,
+      transition: 'opacity 0.3s ease',
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+    },
+    userName: {
+      fontSize: '14px',
+      fontWeight: '600',
+      marginBottom: '2px',
+    },
+    userRole: {
+      fontSize: '12px',
+      opacity: 0.8,
+    },
+    menu: {
+      flex: 1,
+      padding: '20px 0',
+      overflowY: 'auto',
+    },
+    menuItem: {
+      display: 'flex',
+      alignItems: 'center',
+      padding: '14px 20px',
+      textDecoration: 'none',
+      color: 'rgba(255,255,255,0.8)',
+      cursor: 'pointer',
+      transition: 'all 0.3s ease',
+      borderLeft: '4px solid transparent',
+    },
+    menuItemActive: {
+      background: 'rgba(255,255,255,0.1)',
+      color: 'white',
+      borderLeft: '4px solid #00b4d8',
+    },
+    menuIcon: {
+      fontSize: '18px',
+      minWidth: '24px',
+    },
+    menuLabel: {
+      marginLeft: '16px',
+      fontSize: '14px',
+      fontWeight: '500',
+      opacity: sidebarOpen ? 1 : 0,
+      transition: 'opacity 0.3s ease',
+      whiteSpace: 'nowrap',
+    },
+    badge: {
+      marginLeft: 'auto',
+      background: '#ef4444',
+      color: 'white',
+      fontSize: '10px',
+      fontWeight: 'bold',
+      padding: '2px 6px',
+      borderRadius: '10px',
+      minWidth: '18px',
+      textAlign: 'center',
+      opacity: sidebarOpen ? 1 : 0,
+      transition: 'opacity 0.3s ease',
+    },
+    notifications: {
+      padding: '20px',
+      borderTop: '1px solid rgba(255,255,255,0.1)',
+      opacity: sidebarOpen ? 1 : 0,
+      transition: 'opacity 0.3s ease',
+    },
+    notificationItem: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      fontSize: '13px',
+      marginBottom: '10px',
+      padding: '8px',
+      borderRadius: '6px',
+      background: 'rgba(255,255,255,0.05)',
+    },
+    notificationCount: {
+      background: '#ef4444',
+      color: 'white',
+      fontSize: '11px',
+      fontWeight: 'bold',
+      padding: '2px 6px',
+      borderRadius: '10px',
+      minWidth: '20px',
+      textAlign: 'center',
+    },
+    footer: {
+      padding: '20px',
+      borderTop: '1px solid rgba(255,255,255,0.1)',
+    },
+    logoutButton: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      width: '100%',
+      background: 'rgba(239, 68, 68, 0.2)',
+      border: 'none',
+      color: 'white',
+      padding: '12px',
+      borderRadius: '8px',
+      cursor: 'pointer',
+      fontSize: '14px',
+      fontWeight: '500',
+      transition: 'all 0.3s ease',
+    },
+    logoutText: {
+      opacity: sidebarOpen ? 1 : 0,
+      transition: 'opacity 0.3s ease',
+      whiteSpace: 'nowrap',
+    },
+  };
+
   return (
-    <div style={{
-      ...styles.sidebar,
-      width: sidebarOpen ? 280 : 80,
-    }}>
+    <div style={styles.sidebar}>
+      {/* Header with logo and toggle button */}
       <div style={styles.sidebarHeader}>
-        {sidebarOpen && <h2 style={styles.logo}>Admin Panel</h2>}
-        <button
+        <div style={styles.logo}>
+          <div style={{ fontSize: '24px' }}>🚀</div>
+          {sidebarOpen && <span style={styles.logoText}>Admin Panel</span>}
+        </div>
+        <button 
+          style={styles.toggleButton} 
           onClick={onToggle}
-          style={styles.toggleButton}
+          title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
         >
-          {sidebarOpen ? '◀' : '▶'}
+          {sidebarOpen ? <FaTimes /> : <FaBars />}
         </button>
       </div>
 
-      <nav style={styles.nav}>
-        {menuItems.map(item => (
-          <button
-            key={item.key}
-            style={{
-              ...styles.navButton,
-              backgroundColor: activePage === item.key ? '#0077b6' : 'transparent',
-            }}
-            onClick={() => onNavigate(item.key)}
-          >
-            <span style={{ marginRight: sidebarOpen ? 12 : 0 }}>
-              {item.icon}
-            </span>
-            {sidebarOpen && <span>{item.label}</span>}
-            {item.badge > 0 && (
-              <span style={styles.notificationBadge}>{item.badge}</span>
-            )}
-          </button>
-        ))}
-      </nav>
-
-      <div style={styles.sidebarFooter}>
+      {/* User info */}
+      <div style={styles.userInfo}>
+        <div style={styles.userAvatar}>
+          {user?.email?.[0]?.toUpperCase() || 'A'}
+        </div>
         {sidebarOpen && (
-          <div style={styles.userInfo}>
-            <div style={styles.userAvatar}>
-              <FaUserCog size={20} />
+          <div style={styles.userDetails}>
+            <div style={styles.userName}>
+              {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Admin'}
             </div>
-            <div>
-              <p style={styles.userEmail}>{user?.email}</p>
-              <small style={styles.userRole}>Super Admin</small>
+            <div style={styles.userRole}>
+              {user?.user_metadata?.is_admin ? 'Administrator' : 'Admin'}
             </div>
           </div>
         )}
+      </div>
 
-        <button style={styles.logoutButton} onClick={onLogout}>
-          <FaSignOutAlt style={{ marginRight: sidebarOpen ? 8 : 0 }} />
-          {sidebarOpen && <span>Logout</span>}
+      {/* Menu items */}
+      <div style={styles.menu}>
+        {menuItems.map((item) => (
+          <div
+            key={item.id}
+            style={{
+              ...styles.menuItem,
+              ...(activePage === item.id ? styles.menuItemActive : {}),
+            }}
+            onClick={() => onNavigate(item.id)}
+            title={!sidebarOpen ? item.label : ''}
+          >
+            <div style={styles.menuIcon}>{item.icon}</div>
+            {sidebarOpen && <span style={styles.menuLabel}>{item.label}</span>}
+            
+            {/* Badges for pending items */}
+            {(item.id === 'dashboard' && (pendingCount > 0 || pendingOrdersCount > 0) && sidebarOpen) && (
+              <div style={styles.badge}>
+                {pendingCount + pendingOrdersCount}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Notifications section */}
+      {sidebarOpen && (pendingCount > 0 || pendingOrdersCount > 0) && (
+        <div style={styles.notifications}>
+          <div style={{ 
+            fontSize: '12px', 
+            opacity: 0.7, 
+            marginBottom: '12px',
+            fontWeight: '500'
+          }}>
+            Pending Actions
+          </div>
+          {pendingCount > 0 && (
+            <div style={styles.notificationItem}>
+              <FaCalendarAlt />
+              <span>Pending Bookings</span>
+              <div style={styles.notificationCount}>{pendingCount}</div>
+            </div>
+          )}
+          {pendingOrdersCount > 0 && (
+            <div style={styles.notificationItem}>
+              <FaShoppingCart />
+              <span>Pending Orders</span>
+              <div style={styles.notificationCount}>{pendingOrdersCount}</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Logout button */}
+      <div style={styles.footer}>
+        <button 
+          style={styles.logoutButton} 
+          onClick={onLogout}
+          title={!sidebarOpen ? 'Logout' : ''}
+        >
+          <FaSignOutAlt />
+          {sidebarOpen && <span style={styles.logoutText}>Logout</span>}
         </button>
       </div>
     </div>
   );
-}
+};
+
+export default Sidebar;

@@ -1,7 +1,7 @@
 // InventoryManagement.js - Component for inventory management module
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
-import { FaBoxOpen, FaChartBar, FaTags, FaTruck, FaExclamationTriangle, FaSync } from 'react-icons/fa';
+import { FaBoxOpen, FaChartBar, FaTags, FaExclamationTriangle, FaSync } from 'react-icons/fa';
 
 // ====================
 // MAIN COMPONENT
@@ -13,7 +13,6 @@ const InventoryManagement = () => {
     { key: 'products', icon: <FaBoxOpen />, label: 'Products' },
     { key: 'stock', icon: <FaChartBar />, label: 'Stock Levels' },
     { key: 'categories', icon: <FaTags />, label: 'Categories' },
-    { key: 'suppliers', icon: <FaTruck />, label: 'Suppliers' },
     { key: 'lowstock', icon: <FaExclamationTriangle />, label: 'Low Stock' },
     { key: 'reports', icon: <FaChartBar />, label: 'Reports' },
   ];
@@ -50,7 +49,6 @@ const InventoryManagement = () => {
         {activeTab === 'products' && <ProductsScreen />}
         {activeTab === 'stock' && <StockLevelsScreen />}
         {activeTab === 'categories' && <div style={styles.placeholder}>Categories Screen - Coming Soon</div>}
-        {activeTab === 'suppliers' && <div style={styles.placeholder}>Suppliers Screen - Coming Soon</div>}
         {activeTab === 'lowstock' && <LowStockScreen />}
         {activeTab === 'reports' && <div style={styles.placeholder}>Inventory Reports - Coming Soon</div>}
       </div>
@@ -76,7 +74,7 @@ const ProductsScreen = () => {
     description: '',
     price: '',
     image_url: '',
-    stock_quantity: ''
+    stock: ''
   });
 
   useEffect(() => {
@@ -116,7 +114,7 @@ const ProductsScreen = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const newStock = parseInt(formData.stock_quantity) || 0;
+      const newStock = parseInt(formData.stock) || 0;
       const productData = {
         name: formData.name,
         description: formData.description,
@@ -125,7 +123,7 @@ const ProductsScreen = () => {
       };
 
       if (editingProduct) {
-        const currentStock = editingProduct.stock_quantity || 0;
+        const currentStock = editingProduct.stock || 0;
         if (newStock < currentStock) {
           // Reducing stock, use safe function
           const reduceAmount = currentStock - newStock;
@@ -136,7 +134,7 @@ const ProductsScreen = () => {
           if (stockError) throw stockError;
         } else if (newStock > currentStock) {
           // Increasing stock, update directly
-          productData.stock_quantity = newStock;
+          productData.stock = newStock;
           const { error } = await supabase
             .from('products')
             .update(productData)
@@ -146,7 +144,7 @@ const ProductsScreen = () => {
         // If equal, no change needed
       } else {
         // New product
-        productData.stock_quantity = newStock;
+        productData.stock = newStock;
         const { error } = await supabase
           .from('products')
           .insert([productData]);
@@ -168,7 +166,7 @@ const ProductsScreen = () => {
       description: product.description || '',
       price: product.price || '',
       image_url: product.image_url || '',
-      stock_quantity: product.stock_quantity || ''
+      stock: product.stock || ''
     });
     setShowForm(true);
   };
@@ -208,7 +206,7 @@ const ProductsScreen = () => {
       description: '',
       price: '',
       image_url: '',
-      stock_quantity: ''
+      stock: ''
     });
     setEditingProduct(null);
     setShowForm(false);
@@ -322,11 +320,11 @@ const ProductsScreen = () => {
                 />
               </div>
               <div style={styles.formGroup}>
-                <label style={styles.label}>Stock Quantity</label>
+                <label style={styles.label}>Stock</label>
                 <input
                   type="number"
-                  value={formData.stock_quantity}
-                  onChange={(e) => handleInputChange('stock_quantity', e.target.value)}
+                  value={formData.stock}
+                  onChange={(e) => handleInputChange('stock', e.target.value)}
                   style={styles.input}
                   min="0"
                 />
@@ -379,7 +377,7 @@ const ProductsScreen = () => {
           <div style={styles.confirmModal}>
             <h3 style={styles.modalTitle}>Add Stock</h3>
             <p style={styles.confirmMessage}>
-              Add stock to "{productToAddStock.name}" (Current: {productToAddStock.stock_quantity})
+              Add stock to "{productToAddStock.name}" (Current: {productToAddStock.stock})
             </p>
             <div style={styles.formGroup}>
               <label style={styles.label}>Quantity to Add</label>
@@ -415,21 +413,21 @@ const ProductsScreen = () => {
               key={product.id}
               style={{
                 ...styles.productCard,
-                border: product.stock_quantity <= 5 ? '2px solid var(--sky-blue)' : '1px solid #e5e7eb',
-                boxShadow: product.stock_quantity <= 5 ? '0 0 10px var(--sky-blue)' : '0 2px 8px rgba(0,0,0,0.1)',
+                border: product.stock <= 5 ? '2px solid var(--sky-blue)' : '1px solid #e5e7eb',
+                boxShadow: product.stock <= 5 ? '0 0 10px var(--sky-blue)' : '0 2px 8px rgba(0,0,0,0.1)',
               }}
             >
               <div style={styles.productInfo}>
                 <div style={styles.productHeader}>
                   <h3 style={styles.productName}>{product.name}</h3>
                   <div style={styles.productBadges}>
-                    {product.stock_quantity <= 5 && <span style={styles.lowStockBadge}>Low Stock</span>}
+                    {product.stock <= 5 && <span style={styles.lowStockBadge}>Low Stock</span>}
                   </div>
                 </div>
                 <p style={styles.productDescription}>{product.description}</p>
                 <div style={styles.productDetails}>
                   {product.price && <span style={styles.detail}>₱{product.price}</span>}
-                  {product.stock_quantity !== undefined && <span style={styles.detail}>Stock: {product.stock_quantity}</span>}
+                  {product.stock !== undefined && <span style={styles.detail}>Stock: {product.stock}</span>}
                 </div>
               </div>
               <div style={styles.productActions}>
@@ -565,7 +563,7 @@ const StockLevelsScreen = () => {
           <div style={styles.confirmModal}>
             <h3 style={styles.modalTitle}>Add Stock</h3>
             <p style={styles.confirmMessage}>
-              Add stock to "{productToAddStock.name}" (Current: {productToAddStock.stock_quantity})
+              Add stock to "{productToAddStock.name}" (Current: {productToAddStock.stock})
             </p>
             <div style={styles.formGroup}>
               <label style={styles.label}>Quantity to Add</label>
@@ -601,21 +599,21 @@ const StockLevelsScreen = () => {
               key={product.id}
               style={{
                 ...styles.stockCard,
-                border: product.stock_quantity <= 5 ? '2px solid var(--sky-blue)' : '1px solid #e5e7eb',
-                boxShadow: product.stock_quantity <= 5 ? '0 0 10px var(--sky-blue)' : '0 2px 8px rgba(0,0,0,0.1)',
+                border: product.stock <= 5 ? '2px solid var(--sky-blue)' : '1px solid #e5e7eb',
+                boxShadow: product.stock <= 5 ? '0 0 10px var(--sky-blue)' : '0 2px 8px rgba(0,0,0,0.1)',
               }}
             >
               <div style={styles.productInfo}>
                 <div style={styles.productHeader}>
                   <h3 style={styles.productName}>{product.name}</h3>
                   <div style={styles.productBadges}>
-                    {product.stock_quantity <= 5 && <span style={styles.lowStockBadge}>Low Stock</span>}
+                    {product.stock <= 5 && <span style={styles.lowStockBadge}>Low Stock</span>}
                   </div>
                 </div>
                 <p style={styles.productDescription}>{product.description}</p>
                 <div style={styles.productDetails}>
                   {product.price && <span style={styles.detail}>₱{product.price}</span>}
-                  <span style={styles.detail}>Current Stock: {product.stock_quantity}</span>
+                  <span style={styles.detail}>Current Stock: {product.stock}</span>
                 </div>
               </div>
               <div style={styles.stockActions}>
@@ -641,6 +639,9 @@ const LowStockScreen = () => {
   const [lowStockProducts, setLowStockProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showAddStockModal, setShowAddStockModal] = useState(false);
+  const [productToAddStock, setProductToAddStock] = useState(null);
+  const [addQuantity, setAddQuantity] = useState('');
 
   useEffect(() => {
     fetchLowStockProducts();
@@ -663,9 +664,9 @@ const LowStockScreen = () => {
       setLoading(true);
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, price, stock_quantity, image_url, created_at')
-        .lte('stock_quantity', 5)
-        .order('stock_quantity', { ascending: true });
+        .select('id, name, price, stock, image_url, created_at')
+        .lte('stock', 5)
+        .order('stock', { ascending: true });
 
       if (error) throw error;
       setLowStockProducts(data || []);
@@ -686,6 +687,41 @@ const LowStockScreen = () => {
   const handleProductClick = (product) => {
     // For now, alert; in full app, navigate to edit
     alert(`Edit product: ${product.name}`);
+  };
+
+  const handleAddStock = (product) => {
+    setProductToAddStock(product);
+    setAddQuantity('');
+    setShowAddStockModal(true);
+  };
+
+  const confirmAddStock = async () => {
+    const quantity = parseInt(addQuantity);
+    if (!quantity || quantity <= 0) {
+      alert('Please enter a valid positive quantity.');
+      return;
+    }
+
+    try {
+      const { error } = await supabase.rpc('add_stock', {
+        product_id_param: productToAddStock.id,
+        quantity_param: quantity
+      });
+      if (error) throw error;
+      fetchLowStockProducts();
+      setShowAddStockModal(false);
+      setProductToAddStock(null);
+      setAddQuantity('');
+    } catch (error) {
+      console.error('Error adding stock:', error);
+      alert('Error adding stock: ' + error.message);
+    }
+  };
+
+  const cancelAddStock = () => {
+    setShowAddStockModal(false);
+    setProductToAddStock(null);
+    setAddQuantity('');
   };
 
   if (loading) {
@@ -710,6 +746,25 @@ const LowStockScreen = () => {
         </button>
       </div>
 
+      {showAddStockModal && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modal}>
+            <h3>Add Stock to {productToAddStock?.name}</h3>
+            <input
+              type="number"
+              placeholder="Quantity to add"
+              value={addQuantity}
+              onChange={(e) => setAddQuantity(e.target.value)}
+              style={styles.input}
+            />
+            <div style={styles.modalButtons}>
+              <button onClick={confirmAddStock} style={styles.confirmButton}>Add Stock</button>
+              <button onClick={cancelAddStock} style={styles.cancelButton}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={styles.lowStockList}>
         {lowStockProducts.length === 0 ? (
           <div style={styles.emptyState}>
@@ -721,7 +776,7 @@ const LowStockScreen = () => {
               key={product.id}
               style={{
                 ...styles.lowStockCard,
-                opacity: product.stock_quantity === 0 ? 0.6 : 1,
+                opacity: product.stock === 0 ? 0.6 : 1,
                 cursor: 'pointer',
               }}
               onClick={() => handleProductClick(product)}
@@ -733,10 +788,18 @@ const LowStockScreen = () => {
                 <h3 style={styles.productName}>{product.name}</h3>
                 <div style={styles.productDetails}>
                   <span style={styles.stockBadge}>
-                    Stock: {product.stock_quantity}
+                    Stock: {product.stock}
                   </span>
                   {product.price && <span style={styles.price}>₱{product.price}</span>}
                 </div>
+              </div>
+              <div style={styles.lowStockActions}>
+                <button
+                  style={styles.addStockButton}
+                  onClick={() => handleAddStock(product)}
+                >
+                  Add Stock
+                </button>
               </div>
             </div>
           ))
@@ -1052,12 +1115,17 @@ const styles = {
   lowStockCard: {
     display: 'flex',
     alignItems: 'center',
+    justifyContent: 'space-between',
     padding: '20px',
     borderRadius: '12px',
     background: 'var(--white)',
     border: '2px solid var(--sky-blue)',
     boxShadow: '0 0 10px var(--sky-blue)',
     transition: 'all 0.3s ease',
+  },
+  lowStockActions: {
+    display: 'flex',
+    gap: '8px',
   },
   productImage: {
     width: '60px',

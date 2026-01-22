@@ -1,6 +1,6 @@
 // ServiceScheduling.js - Component for service scheduling module
 import React, { useState, useEffect } from 'react';
-import { FaCalendarAlt, FaClock, FaUser, FaHistory, FaCog } from 'react-icons/fa';
+import { FaCalendarAlt, FaClock, FaUser, FaHistory, FaCog, FaCalendarCheck, FaTimes } from 'react-icons/fa';
 import Calendar from 'react-calendar';
 import { supabase } from '../supabase';
 import 'react-calendar/dist/Calendar.css';
@@ -335,6 +335,15 @@ const AllBookings = ({ currentUser }) => {
 const ServiceRequests = ({ currentUser }) => {
   const [pendingBookings, setPendingBookings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState(null);
+  const [assignData, setAssignData] = useState({
+    date: '',
+    time: '',
+    staff: ''
+  });
+  const [rejectReason, setRejectReason] = useState('');
 
   useEffect(() => {
     fetchPendingBookings();
@@ -358,22 +367,106 @@ const ServiceRequests = ({ currentUser }) => {
     }
   };
 
-  const updateStatus = async (id, newStatus) => {
-    if (!currentUser?.is_admin) {
-      alert('Only admin can update status');
+
+  const handleAssignBooking = (booking) => {
+    setSelectedBooking(booking);
+    setAssignData({
+      date: booking.date || '',
+      time: '',
+      staff: ''
+    });
+    setShowAssignModal(true);
+  };
+
+  const handleRejectBooking = (booking) => {
+    setSelectedBooking(booking);
+    setRejectReason('');
+    setShowRejectModal(true);
+  };
+
+  const confirmAssignBooking = async () => {
+    if (!assignData.date || !assignData.time || !assignData.staff) {
+      alert('Please fill in all assignment details');
       return;
     }
 
-    const { error } = await supabase
-      .from('bookings')
-      .update({ status: newStatus })
-      .eq('id', id);
+    try {
+      const { error } = await supabase
+        .from('bookings')
+        .update({
+          status: 'approved',
+          assigned_date: assignData.date,
+          assigned_time: assignData.time,
+          assigned_staff: assignData.staff
+        })
+        .eq('id', selectedBooking.id);
 
-    if (error) {
-      alert('Error updating status: ' + error.message);
-    } else {
-      fetchPendingBookings(); // Refresh the list
+      if (error) throw error;
+
+      // Send notification to customer
+      await sendNotification(selectedBooking, 'approved', {
+        date: assignData.date,
+        time: assignData.time,
+        staff: assignData.staff
+      });
+
+      fetchPendingBookings();
+      setShowAssignModal(false);
+      setSelectedBooking(null);
+      alert('Booking approved and assigned successfully!');
+    } catch (error) {
+      console.error('Error assigning booking:', error);
+      alert('Error assigning booking: ' + error.message);
     }
+  };
+
+  const confirmRejectBooking = async () => {
+    if (!rejectReason.trim()) {
+      alert('Please provide a reason for rejection');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('bookings')
+        .update({
+          status: 'rejected',
+          rejection_reason: rejectReason
+        })
+        .eq('id', selectedBooking.id);
+
+      if (error) throw error;
+
+      // Send notification to customer
+      await sendNotification(selectedBooking, 'rejected', { reason: rejectReason });
+
+      fetchPendingBookings();
+      setShowRejectModal(false);
+      setSelectedBooking(null);
+      setRejectReason('');
+      alert('Booking rejected successfully!');
+    } catch (error) {
+      console.error('Error rejecting booking:', error);
+      alert('Error rejecting booking: ' + error.message);
+    }
+  };
+
+  const sendNotification = async (booking, status, details) => {
+    // This would integrate with your notification system
+    // For now, we'll just log it
+    console.log(`Notification sent to ${booking.name} for booking ${booking.id}:`, {
+      status,
+      details,
+      message: status === 'approved'
+        ? `Your booking has been approved! Date: ${details.date}, Time: ${details.time}, Staff: ${details.staff}`
+        : `Your booking has been rejected. Reason: ${details.reason}`
+    });
+
+    // In a real implementation, you might:
+    // 1. Send email via Supabase Edge Functions
+    // 2. Send SMS via third-party service
+    // 3. Store notification in database
+    // 4. Send push notification if app supports it
   };
 
   if (loading) {
@@ -412,10 +505,12 @@ const ServiceRequests = ({ currentUser }) => {
                 <td>{b.date}</td>
                 {currentUser?.is_admin && (
                   <td>
-                    <button onClick={() => updateStatus(b.id, 'approved')} style={styles.approveBtn}>
-                      Approve
+                    <button onClick={() => handleAssignBooking(b)} style={styles.assignBtn}>
+                      <FaCalendarCheck style={{ marginRight: 4 }} />
+                      Assign
                     </button>
-                    <button onClick={() => updateStatus(b.id, 'rejected')} style={styles.rejectBtn}>
+                    <button onClick={() => handleRejectBooking(b)} style={styles.rejectBtn}>
+                      <FaTimes style={{ marginRight: 4 }} />
                       Reject
                     </button>
                   </td>
@@ -424,6 +519,109 @@ const ServiceRequests = ({ currentUser }) => {
             ))}
           </tbody>
         </table>
+      )}
+
+      {/* Assignment Modal */}
+      {showAssignModal && selectedBooking && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modal}>
+            <div style={styles.modalHeader}>
+              <h3 style={styles.modalTitle}>Assign Service Booking</h3>
+              <button style={styles.closeButton} onClick={() => setShowAssignModal(false)}>×</button>
+            </div>
+            <div style={styles.modalContent}>
+              <div style={styles.bookingInfo}>
+                <p><strong>Customer:</strong> {selectedBooking.name}</p>
+                <p><strong>Service:</strong> {selectedBooking.service}</p>
+                <p><strong>Requested Date:</strong> {selectedBooking.date}</p>
+              </div>
+
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Service Date *</label>
+                <input
+                  type="date"
+                  value={assignData.date}
+                  onChange={(e) => setAssignData({...assignData, date: e.target.value})}
+                  style={styles.input}
+                  min={new Date().toISOString().split('T')[0]}
+                />
+              </div>
+
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Service Time *</label>
+                <input
+                  type="time"
+                  value={assignData.time}
+                  onChange={(e) => setAssignData({...assignData, time: e.target.value})}
+                  style={styles.input}
+                />
+              </div>
+
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Assign Staff/Technician *</label>
+                <select
+                  value={assignData.staff}
+                  onChange={(e) => setAssignData({...assignData, staff: e.target.value})}
+                  style={styles.input}
+                >
+                  <option value="">Select Staff</option>
+                  <option value="John Doe">John Doe</option>
+                  <option value="Jane Smith">Jane Smith</option>
+                  <option value="Mike Johnson">Mike Johnson</option>
+                  <option value="Sarah Wilson">Sarah Wilson</option>
+                </select>
+              </div>
+            </div>
+            <div style={styles.modalActions}>
+              <button style={styles.cancelButton} onClick={() => setShowAssignModal(false)}>
+                Cancel
+              </button>
+              <button style={styles.confirmButton} onClick={confirmAssignBooking}>
+                <FaCalendarCheck style={{ marginRight: 8 }} />
+                Approve & Assign
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rejection Modal */}
+      {showRejectModal && selectedBooking && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modal}>
+            <div style={styles.modalHeader}>
+              <h3 style={styles.modalTitle}>Reject Service Booking</h3>
+              <button style={styles.closeButton} onClick={() => setShowRejectModal(false)}>×</button>
+            </div>
+            <div style={styles.modalContent}>
+              <div style={styles.bookingInfo}>
+                <p><strong>Customer:</strong> {selectedBooking.name}</p>
+                <p><strong>Service:</strong> {selectedBooking.service}</p>
+                <p><strong>Requested Date:</strong> {selectedBooking.date}</p>
+              </div>
+
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Reason for Rejection *</label>
+                <textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  style={styles.textarea}
+                  placeholder="Please provide a reason for rejecting this booking..."
+                  rows={4}
+                />
+              </div>
+            </div>
+            <div style={styles.modalActions}>
+              <button style={styles.cancelButton} onClick={() => setShowRejectModal(false)}>
+                Cancel
+              </button>
+              <button style={styles.rejectConfirmButton} onClick={confirmRejectBooking}>
+                <FaTimes style={{ marginRight: 8 }} />
+                Reject Booking
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -715,6 +913,131 @@ const styles = {
     borderRadius: 6,
     padding: '6px 10px',
     cursor: 'pointer',
+  },
+  assignBtn: {
+    backgroundColor: '#10b981',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 6,
+    padding: '6px 10px',
+    marginRight: 6,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+  },
+  modalOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  modal: {
+    background: 'white',
+    padding: '30px',
+    borderRadius: '12px',
+    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+    maxWidth: '500px',
+    width: '90%',
+    maxHeight: '80vh',
+    overflowY: 'auto',
+  },
+  modalHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '20px',
+  },
+  modalTitle: {
+    margin: 0,
+    color: 'var(--dark-blue)',
+    fontSize: '20px',
+    fontWeight: '600',
+  },
+  closeButton: {
+    background: 'none',
+    border: 'none',
+    fontSize: '24px',
+    cursor: 'pointer',
+    color: 'var(--sky-blue)',
+  },
+  modalContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '20px',
+  },
+  bookingInfo: {
+    background: '#f8fafc',
+    padding: '15px',
+    borderRadius: '8px',
+    border: '1px solid #e5e7eb',
+  },
+  formGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+  label: {
+    fontWeight: '600',
+    color: 'var(--dark-blue)',
+    fontSize: '14px',
+  },
+  input: {
+    padding: '12px',
+    border: '1px solid #d1d5db',
+    borderRadius: '6px',
+    fontSize: '14px',
+    background: 'white',
+  },
+  textarea: {
+    padding: '12px',
+    border: '1px solid #d1d5db',
+    borderRadius: '6px',
+    fontSize: '14px',
+    background: 'white',
+    resize: 'vertical',
+  },
+  modalActions: {
+    display: 'flex',
+    gap: '12px',
+    justifyContent: 'flex-end',
+    marginTop: '20px',
+  },
+  cancelButton: {
+    background: 'var(--sky-blue)',
+    color: 'white',
+    border: 'none',
+    padding: '12px 24px',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontWeight: '500',
+  },
+  confirmButton: {
+    background: '#10b981',
+    color: 'white',
+    border: 'none',
+    padding: '12px 24px',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontWeight: '500',
+    display: 'flex',
+    alignItems: 'center',
+  },
+  rejectConfirmButton: {
+    background: '#ef4444',
+    color: 'white',
+    border: 'none',
+    padding: '12px 24px',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontWeight: '500',
+    display: 'flex',
+    alignItems: 'center',
   },
 };
 

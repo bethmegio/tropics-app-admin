@@ -1,7 +1,7 @@
 // SalesManagement.js - Component for sales management module
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
-import { FaShoppingBag, FaFileInvoice, FaCreditCard, FaUsers, FaChartBar } from 'react-icons/fa';
+import { FaShoppingBag, FaFileInvoice, FaUsers, FaChartBar } from 'react-icons/fa';
 
 // ====================
 // MAIN COMPONENT
@@ -13,7 +13,6 @@ const SalesManagement = () => {
     { key: 'dashboard', icon: <FaChartBar />, label: 'Dashboard' },
     { key: 'orders', icon: <FaShoppingBag />, label: 'Orders' },
     { key: 'invoices', icon: <FaFileInvoice />, label: 'Invoices' },
-    { key: 'payments', icon: <FaCreditCard />, label: 'Payments' },
     { key: 'customers', icon: <FaUsers />, label: 'Customers' },
     { key: 'reports', icon: <FaChartBar />, label: 'Reports' },
   ];
@@ -50,7 +49,6 @@ const SalesManagement = () => {
         {activeTab === 'orders' && <OrdersScreen />}
         {activeTab === 'dashboard' && <div style={styles.placeholder}>Sales Dashboard - Coming Soon</div>}
         {activeTab === 'invoices' && <div style={styles.placeholder}>Invoices Screen - Coming Soon</div>}
-        {activeTab === 'payments' && <div style={styles.placeholder}>Payments Screen - Coming Soon</div>}
         {activeTab === 'customers' && <div style={styles.placeholder}>Customers Screen - Coming Soon</div>}
         {activeTab === 'reports' && <div style={styles.placeholder}>Sales Reports - Coming Soon</div>}
       </div>
@@ -73,6 +71,10 @@ const OrdersScreen = () => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [channelFilter, setChannelFilter] = useState('all');
+  const [paymentFilter, setPaymentFilter] = useState('all');
   const [sortBy, setSortBy] = useState('created_at');
   const [sortOrder, setSortOrder] = useState('desc');
   const [currentPage, setCurrentPage] = useState(1);
@@ -91,6 +93,30 @@ const OrdersScreen = () => {
     // Filter by status
     if (statusFilter !== 'all') {
       filtered = filtered.filter(order => order.status === statusFilter);
+    }
+
+    // Filter by date range
+    if (dateFrom) {
+      const fromDate = new Date(dateFrom);
+      filtered = filtered.filter(order => new Date(order.created_at) >= fromDate);
+    }
+    if (dateTo) {
+      const toDate = new Date(dateTo);
+      toDate.setHours(23, 59, 59, 999); // End of day
+      filtered = filtered.filter(order => new Date(order.created_at) <= toDate);
+    }
+
+    // Filter by sales channel
+    if (channelFilter !== 'all') {
+      filtered = filtered.filter(order => {
+        const channel = order.channel === 'mobile' ? 'mobile' : 'in-store';
+        return channel === channelFilter;
+      });
+    }
+
+    // Filter by payment method
+    if (paymentFilter !== 'all') {
+      filtered = filtered.filter(order => order.payment_method === paymentFilter);
     }
 
     // Filter by search term
@@ -130,7 +156,7 @@ const OrdersScreen = () => {
     });
 
     setFilteredOrders(filtered);
-  }, [orders, searchTerm, statusFilter, sortBy, sortOrder]);
+  }, [orders, searchTerm, statusFilter, dateFrom, dateTo, channelFilter, paymentFilter, sortBy, sortOrder]);
 
   useEffect(() => {
     const startIndex = (currentPage - 1) * pageSize;
@@ -178,8 +204,8 @@ const OrdersScreen = () => {
 
       if (updateError) throw updateError;
 
-      // If accepted, reduce stock for each item
-      if (status === 'accepted' && order.items) {
+      // If approved, reduce stock for each item
+      if (status === 'approved' && order.items) {
         for (const item of order.items) {
           const { error: stockError } = await supabase.rpc('reduce_stock', {
             product_id_param: item.id, // Assuming item.id is product_id
@@ -188,7 +214,7 @@ const OrdersScreen = () => {
 
           if (stockError) {
             console.error('Error reducing stock for product', item.id, stockError);
-            alert('Order accepted but failed to reduce stock for some items: ' + stockError.message);
+            alert('Order approved but failed to reduce stock for some items: ' + stockError.message);
             // Continue with other items
           }
         }
@@ -243,6 +269,44 @@ const OrdersScreen = () => {
           onChange={(e) => setSearchTerm(e.target.value)}
           style={styles.searchInput}
         />
+
+        <div style={styles.dateFilters}>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            style={styles.dateInput}
+            placeholder="From date"
+          />
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            style={styles.dateInput}
+            placeholder="To date"
+          />
+        </div>
+
+        <select
+          value={channelFilter}
+          onChange={(e) => setChannelFilter(e.target.value)}
+          style={styles.filterSelect}
+        >
+          <option value="all">All Channels</option>
+          <option value="in-store">In-store</option>
+          <option value="mobile">Mobile App</option>
+        </select>
+
+        <select
+          value={paymentFilter}
+          onChange={(e) => setPaymentFilter(e.target.value)}
+          style={styles.filterSelect}
+        >
+          <option value="all">All Payments</option>
+          <option value="cash">Cash</option>
+          <option value="gcash">GCash</option>
+        </select>
+
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
@@ -250,9 +314,11 @@ const OrdersScreen = () => {
         >
           <option value="all">All Statuses</option>
           <option value="pending">Pending</option>
-          <option value="accepted">Accepted</option>
-          <option value="declined">Declined</option>
+          <option value="approved">Approved</option>
+          <option value="completed">Completed</option>
+          <option value="rejected">Rejected</option>
         </select>
+
         <select
           value={`${sortBy}-${sortOrder}`}
           onChange={(e) => {
@@ -269,6 +335,21 @@ const OrdersScreen = () => {
           <option value="status-asc">Status A-Z</option>
           <option value="status-desc">Status Z-A</option>
         </select>
+
+        <button
+          onClick={() => {
+            setSearchTerm('');
+            setStatusFilter('all');
+            setDateFrom('');
+            setDateTo('');
+            setChannelFilter('all');
+            setPaymentFilter('all');
+            setCurrentPage(1);
+          }}
+          style={styles.clearButton}
+        >
+          Clear Filters
+        </button>
       </div>
 
       {showDetailsModal && selectedOrder && (
@@ -287,6 +368,8 @@ const OrdersScreen = () => {
                 <p><strong>Address:</strong> {selectedOrder.customer_address}</p>
                 <p><strong>Total:</strong> ₱{selectedOrder.total}</p>
                 <p><strong>Status:</strong> <span style={{ color: getStatusColor(selectedOrder.status) }}>{selectedOrder.status}</span></p>
+                <p><strong>Channel:</strong> {selectedOrder.channel === 'mobile' ? 'Mobile App' : 'In-store'}</p>
+                <p><strong>Payment:</strong> {selectedOrder.payment_method || 'Cash'}</p>
                 <p><strong>Created:</strong> {new Date(selectedOrder.created_at).toLocaleString()}</p>
               </div>
               <div style={styles.itemsList}>
@@ -345,21 +428,37 @@ const OrdersScreen = () => {
                 >
                   View Details
                 </button>
-                {order.status === 'pending' && (
+                {order.status === 'pending' && order.channel === 'mobile' && (
                   <>
                     <button
                       style={styles.acceptButton}
-                      onClick={() => updateOrderStatus(order.id, 'accepted')}
+                      onClick={() => updateOrderStatus(order.id, 'approved')}
                     >
-                      Accept
+                      Approve
                     </button>
                     <button
                       style={styles.declineButton}
-                      onClick={() => updateOrderStatus(order.id, 'declined')}
+                      onClick={() => updateOrderStatus(order.id, 'rejected')}
                     >
-                      Decline
+                      Reject
                     </button>
                   </>
+                )}
+                {order.status === 'pending' && order.channel !== 'mobile' && (
+                  <button
+                    style={styles.completeButton}
+                    onClick={() => updateOrderStatus(order.id, 'completed')}
+                  >
+                    Complete
+                  </button>
+                )}
+                {order.status === 'approved' && (
+                  <button
+                    style={styles.completeButton}
+                    onClick={() => updateOrderStatus(order.id, 'completed')}
+                  >
+                    Complete
+                  </button>
                 )}
               </div>
             </div>
@@ -456,6 +555,18 @@ const styles = {
     flexWrap: 'wrap',
     marginBottom: '20px',
   },
+  dateFilters: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+  },
+  dateInput: {
+    padding: '8px 12px',
+    border: '1px solid #d1d5db',
+    borderRadius: '6px',
+    fontSize: '14px',
+    background: 'white',
+  },
   searchInput: {
     padding: '8px 12px',
     border: '1px solid #d1d5db',
@@ -469,6 +580,15 @@ const styles = {
     borderRadius: '6px',
     fontSize: '14px',
     background: 'white',
+  },
+  clearButton: {
+    padding: '8px 16px',
+    border: '1px solid #d1d5db',
+    borderRadius: '6px',
+    background: '#f3f4f6',
+    color: '#374151',
+    cursor: 'pointer',
+    fontSize: '14px',
   },
   loading: {
     textAlign: 'center',
@@ -649,6 +769,14 @@ const styles = {
   },
   declineButton: {
     background: 'var(--dark-blue)',
+    color: 'var(--white)',
+    border: 'none',
+    padding: '8px 16px',
+    borderRadius: '6px',
+    cursor: 'pointer',
+  },
+  completeButton: {
+    background: '#10b981',
     color: 'var(--white)',
     border: 'none',
     padding: '8px 16px',

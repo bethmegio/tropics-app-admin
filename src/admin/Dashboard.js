@@ -4,13 +4,13 @@ import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import UserSystemManagement from './UserSystemManagement'
 import ProductManagement from './ProductManagement'
 import ServiceManagement from './ServiceManagement'
-import OrderManagement from './OrderManagement'
-import Settings from './Settings'
 import SalesManagement from './SalesManagement'
+import Settings from './Settings'
 import InventoryManagement from './InventoryManagement'
 import ServiceScheduling from './ServiceScheduling'
 import Sidebar from './Sidebar'
-import { FaUsers, FaShoppingBag, FaTools, FaBoxOpen, FaCalendarAlt, FaBell } from 'react-icons/fa'
+import { FaShoppingBag, FaCalendarAlt, FaBoxOpen } from 'react-icons/fa'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend } from 'recharts'
 import { supabase } from '../supabase'
 
 // Styles defined first
@@ -60,6 +60,9 @@ const pageStyles = {
   header: {
     marginBottom: '30px',
     position: 'relative',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
   title: {
     fontSize: '32px',
@@ -113,46 +116,14 @@ const pageStyles = {
     color: '#10b981',
     fontWeight: '500',
   },
-  dashboardContent: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '30px',
-  },
-  quickActions: {
-    background: 'white',
-    padding: '25px',
-    borderRadius: '12px',
-    border: '1px solid #f3f4f6',
-  },
   sectionTitle: {
     fontSize: '20px',
     color: '#1f2937',
     margin: '0 0 20px 0',
     fontWeight: '600',
   },
-  actionGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-    gap: '16px',
-  },
-  actionButton: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '25px 20px',
-    color: 'white',
-    border: 'none',
-    borderRadius: '12px',
-    cursor: 'pointer',
-    fontWeight: '500',
-    gap: '12px',
-    textAlign: 'center',
-  },
   notificationContainer: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
+    position: 'relative',
   },
   notificationButton: {
     position: 'relative',
@@ -205,33 +176,74 @@ const pageStyles = {
     fontSize: '14px',
     color: '#374151',
   },
+  chartSection: {
+    background: 'white',
+    padding: '25px',
+    borderRadius: '12px',
+    border: '1px solid #e5e7eb',
+    marginBottom: '30px',
+  },
+  chartControls: {
+    display: 'flex',
+    gap: '10px',
+    marginBottom: '20px',
+  },
+  button: {
+    padding: '8px 16px',
+    border: '1px solid #d1d5db',
+    background: 'white',
+    borderRadius: '6px',
+    cursor: 'pointer',
+  },
+  activeButton: {
+    padding: '8px 16px',
+    border: '1px solid #0077b6',
+    background: '#e0f2fe',
+    color: '#0077b6',
+    borderRadius: '6px',
+    cursor: 'pointer',
+  },
 };
 
 export default function Dashboard({ user }) {
   const navigate = useNavigate()
   const location = useLocation()
-  const [activePage, setActivePage] = useState(location.pathname.split('/').pop() || 'dashboard')
+  const [activePage, setActivePage] = useState('dashboard')
   const [pendingCount, setPendingCount] = useState(0)
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [adminStats, setAdminStats] = useState({
-    totalUsers: 0,
-    totalProducts: 0,
-    totalServices: 0,
-    revenue: 0
+    totalSalesToday: 0,
+    totalSalesThisMonth: 0,
+    pendingServiceBookings: 0,
+    pendingOrders: 0,
+    lowStockProducts: 0
   })
   const [loading, setLoading] = useState(true)
   const [authError, setAuthError] = useState(null)
+
+  // Update active page based on URL
+  useEffect(() => {
+    const path = location.pathname.split('/')
+    const currentPage = path[path.length - 1] || 'dashboard'
+    setActivePage(currentPage)
+  }, [location])
 
   const fetchPendingCount = useCallback(async () => {
     try {
       const { count, error } = await supabase
         .from('bookings')
-        .select('*', { count: 'exact', head: true })
+        .select('*', { count: 'exact' })
         .eq('status', 'pending')
 
       if (error) throw error
       setPendingCount(count || 0)
+      
+      // Update admin stats
+      setAdminStats(prev => ({
+        ...prev,
+        pendingServiceBookings: count || 0
+      }))
     } catch (error) {
       console.error('Error fetching pending count:', error)
     }
@@ -241,11 +253,17 @@ export default function Dashboard({ user }) {
     try {
       const { count, error } = await supabase
         .from('orders')
-        .select('*', { count: 'exact', head: true })
+        .select('*', { count: 'exact' })
         .eq('status', 'pending')
 
       if (error) throw error
       setPendingOrdersCount(count || 0)
+      
+      // Update admin stats
+      setAdminStats(prev => ({
+        ...prev,
+        pendingOrders: count || 0
+      }))
     } catch (error) {
       console.error('Error fetching pending orders count:', error)
     }
@@ -302,42 +320,67 @@ export default function Dashboard({ user }) {
 
   const fetchAdminStats = async () => {
     try {
-      // Fetch users count
-      const { count: usersCount, error: usersError } = await supabase
-        .from('users')
-        .select('*', { count: 'exact', head: true })
+      // Get today's date in UTC
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const startOfToday = today.toISOString()
+      
+      // Get first day of current month
+      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString()
 
-      if (usersError) throw usersError
-
-      // For products and services, you might need to adjust table names
-      const { count: productsCount, error: productsError } = await supabase
-        .from('products')
-        .select('*', { count: 'exact', head: true })
-
-      if (productsError) console.error('Products error:', productsError)
-
-      const { count: servicesCount, error: servicesError } = await supabase
-        .from('services')
-        .select('*', { count: 'exact', head: true })
-
-      if (servicesError) console.error('Services error:', servicesError)
-
-      // Fetch revenue from orders
-      const { data: orders, error: ordersError } = await supabase
+      // Total Sales Today
+      const { data: todayOrders, error: todayError } = await supabase
         .from('orders')
-        .select('total')
-        .eq('status', 'accepted')
+        .select('total_amount, created_at')
+        .eq('status', 'completed')
+        .gte('created_at', startOfToday)
 
-      let revenue = 0
-      if (!ordersError && orders) {
-        revenue = orders.reduce((sum, order) => sum + (order.total || 0), 0)
+      let totalSalesToday = 0
+      if (!todayError && todayOrders) {
+        totalSalesToday = todayOrders.reduce((sum, order) => sum + (order.total_amount || order.total || 0), 0)
       }
 
+      // Total Sales This Month
+      const { data: monthOrders, error: monthError } = await supabase
+        .from('orders')
+        .select('total_amount, created_at')
+        .eq('status', 'completed')
+        .gte('created_at', startOfMonth)
+
+      let totalSalesThisMonth = 0
+      if (!monthError && monthOrders) {
+        totalSalesThisMonth = monthOrders.reduce((sum, order) => sum + (order.total_amount || order.total || 0), 0)
+      }
+
+      // Pending Service Bookings
+      const { count: pendingBookings, error: bookingsError } = await supabase
+        .from('bookings')
+        .select('*', { count: 'exact' })
+        .eq('status', 'pending')
+
+      // Pending Orders for Approval
+      const { count: pendingOrders, error: ordersError } = await supabase
+        .from('orders')
+        .select('*', { count: 'exact' })
+        .eq('status', 'pending')
+
+      // Low Stock Products
+      const { count: lowStock, error: stockError } = await supabase
+        .from('products')
+        .select('*', { count: 'exact' })
+        .lte('stock_quantity', 5)
+
+      // Log any errors for debugging (optional)
+      if (bookingsError) console.error('Bookings error:', bookingsError)
+      if (ordersError) console.error('Orders error:', ordersError)
+      if (stockError) console.error('Stock error:', stockError)
+
       setAdminStats({
-        totalUsers: usersCount || 0,
-        totalProducts: productsCount || 0,
-        totalServices: servicesCount || 0,
-        revenue: revenue
+        totalSalesToday: totalSalesToday,
+        totalSalesThisMonth: totalSalesThisMonth,
+        pendingServiceBookings: pendingBookings || 0,
+        pendingOrders: pendingOrders || 0,
+        lowStockProducts: lowStock || 0
       })
     } catch (error) {
       console.error('Error fetching admin stats:', error)
@@ -347,20 +390,34 @@ export default function Dashboard({ user }) {
   useEffect(() => {
     // Real-time subscriptions
     const bookingsChannel = supabase
-      .channel('pending-bookings')
+      .channel('bookings-channel')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'bookings' },
-        fetchPendingCount
+        {
+          event: '*',
+          schema: 'public',
+          table: 'bookings',
+          filter: 'status=eq.pending'
+        },
+        (payload) => {
+          fetchPendingCount()
+        }
       )
       .subscribe()
 
     const ordersChannel = supabase
-      .channel('pending-orders')
+      .channel('orders-channel')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'orders' },
-        fetchPendingOrdersCount
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders',
+          filter: 'status=eq.pending'
+        },
+        (payload) => {
+          fetchPendingOrdersCount()
+        }
       )
       .subscribe()
 
@@ -427,98 +484,218 @@ export default function Dashboard({ user }) {
       {/* Main Content */}
       <div style={{
         ...styles.content,
-        marginLeft: sidebarOpen ? 280 : 80,
+        marginLeft: sidebarOpen ? '280px' : '80px',
       }}>
+        {/* Always show the dashboard content when on dashboard route */}
+        {activePage === 'dashboard' && <DashboardHome stats={adminStats} />}
+        
         <Routes>
-          <Route path="/" element={<DashboardHome stats={adminStats} pendingCount={pendingCount} pendingOrdersCount={pendingOrdersCount} />} />
-          <Route path="/dashboard" element={<DashboardHome stats={adminStats} pendingCount={pendingCount} pendingOrdersCount={pendingOrdersCount} />} />
-          <Route path="/orders" element={<OrderManagement />} />
-          <Route path="/users" element={<UserSystemManagement />} />
-          <Route path="/products" element={<ProductManagement />} />
-          <Route path="/services" element={<ServiceManagement />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/sales" element={<SalesManagement />} />
-          <Route path="/inventory" element={<InventoryManagement />} />
-          <Route path="/service-scheduling" element={<ServiceScheduling />} />
+          {/* Main dashboard route */}
+          <Route index element={<DashboardHome stats={adminStats} />} />
+          {/* Sub-routes */}
+          <Route path="users" element={<UserSystemManagement />} />
+          <Route path="products" element={<ProductManagement />} />
+          <Route path="services" element={<ServiceManagement />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="sales" element={<SalesManagement />} />
+          <Route path="inventory" element={<InventoryManagement />} />
+          <Route path="service-scheduling" element={<ServiceScheduling />} />
         </Routes>
       </div>
     </div>
   )
 }
 
-// Dashboard Home Component
-function DashboardHome({ stats, pendingCount, pendingOrdersCount }) {
-  const navigate = useNavigate()
+// Dashboard Home Component (keep the same as before)
+function DashboardHome({ stats }) {
   const [showNotifications, setShowNotifications] = useState(false)
+  const [chartData, setChartData] = useState([])
+  const [chartView, setChartView] = useState('weekly')
+  const [salesChannelData, setSalesChannelData] = useState([])
+  const [paymentMethodData, setPaymentMethodData] = useState([])
 
-  const quickActions = [
-    {
-      icon: <FaUsers size={28} />,
-      label: 'Manage Users',
-      description: 'View and manage all users',
-      onClick: () => navigate('/dashboard/users'),
-      color: '#8b5cf6'
-    },
-    {
-      icon: <FaShoppingBag size={28} />,
-      label: 'Orders',
-      description: 'Manage customer orders',
-      onClick: () => navigate('/dashboard/orders'),
-      color: '#3b82f6'
-    },
-    {
-      icon: <FaShoppingBag size={28} />,
-      label: 'Products',
-      description: 'Manage product catalog',
-      onClick: () => navigate('/dashboard/products'),
-      color: '#10b981'
-    },
-    {
-      icon: <FaCalendarAlt size={28} />,
-      label: 'Service Scheduling',
-      description: 'Manage bookings and schedules',
-      onClick: () => navigate('/dashboard/service-scheduling'),
-      color: '#f59e0b'
+  useEffect(() => {
+    fetchSalesTrendsData(chartView)
+
+    // Real-time updates every 30 seconds
+    const interval = setInterval(() => {
+      fetchSalesTrendsData(chartView)
+    }, 30000)
+
+    return () => clearInterval(interval)
+  }, [chartView])
+
+  useEffect(() => {
+    fetchSalesChannelData()
+    fetchPaymentMethodData()
+  }, [])
+
+  const fetchSalesTrendsData = async (view) => {
+    try {
+      const { data: orders, error } = await supabase
+        .from('orders')
+        .select('created_at, total_amount, total')
+        .eq('status', 'completed')
+
+      if (error) throw error
+
+      const grouped = {}
+      orders.forEach(order => {
+        const date = new Date(order.created_at)
+        const total = order.total_amount || order.total || 0
+        
+        let key
+        if (view === 'weekly') {
+          // Get week start (Monday)
+          const weekStart = new Date(date)
+          weekStart.setDate(date.getDate() - date.getDay() + 1)
+          weekStart.setHours(0, 0, 0, 0)
+          key = weekStart.toISOString().split('T')[0]
+        } else if (view === 'monthly') {
+          key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+        } else if (view === 'yearly') {
+          key = date.getFullYear().toString()
+        }
+        
+        if (!grouped[key]) grouped[key] = 0
+        // Assuming profit is 80% of total (simple calculation)
+        grouped[key] += total * 0.8
+      })
+
+      const data = Object.entries(grouped)
+        .map(([date, profit]) => ({ date, profit }))
+        .sort((a, b) => a.date.localeCompare(b.date))
+      
+      setChartData(data)
+    } catch (error) {
+      console.error('Error fetching profit data:', error)
+      // Fallback data
+      setChartView('weekly')
+      setChartData([
+        { date: '2024-01', profit: 15000 },
+        { date: '2024-02', profit: 18000 },
+        { date: '2024-03', profit: 22000 },
+        { date: '2024-04', profit: 19000 },
+        { date: '2024-05', profit: 25000 },
+        { date: '2024-06', profit: 28000 },
+      ])
     }
-  ]
+  }
+
+  const fetchSalesChannelData = async () => {
+    try {
+      const { data: orders, error } = await supabase
+        .from('orders')
+        .select('total_amount, total, source')
+        .eq('status', 'completed')
+
+      if (error) throw error
+
+      const grouped = { 'In-store': 0, 'Online': 0 }
+      orders.forEach(order => {
+        const total = order.total_amount || order.total || 0
+        const source = order.source || 'in-store'
+        const channel = source === 'online' || source === 'mobile' ? 'Online' : 'In-store'
+        grouped[channel] += total
+      })
+
+      const data = Object.entries(grouped).map(([channel, sales]) => ({
+        channel,
+        sales,
+        color: channel === 'In-store' ? '#8884d8' : '#82ca9d'
+      }))
+
+      setSalesChannelData(data)
+    } catch (error) {
+      console.error('Error fetching sales channel data:', error)
+      // Fallback data
+      setSalesChannelData([
+        { channel: 'In-store', sales: 45000, color: '#8884d8' },
+        { channel: 'Online', sales: 32000, color: '#82ca9d' }
+      ])
+    }
+  }
+
+  const fetchPaymentMethodData = async () => {
+    try {
+      const { data: orders, error } = await supabase
+        .from('orders')
+        .select('total_amount, total, payment_method')
+        .eq('status', 'completed')
+
+      if (error) throw error
+
+      const grouped = {}
+      orders.forEach(order => {
+        const total = order.total_amount || order.total || 0
+        const method = order.payment_method || 'Cash'
+        if (!grouped[method]) grouped[method] = 0
+        grouped[method] += total
+      })
+
+      const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#0088FE', '#00C49F']
+      const data = Object.entries(grouped).map(([method, value], index) => ({
+        name: method,
+        value,
+        color: colors[index % colors.length]
+      }))
+
+      setPaymentMethodData(data)
+    } catch (error) {
+      console.error('Error fetching payment method data:', error)
+      // Fallback data
+      setPaymentMethodData([
+        { name: 'Cash', value: 40000, color: '#8884d8' },
+        { name: 'GCash', value: 37000, color: '#82ca9d' },
+        { name: 'Credit Card', value: 28000, color: '#ffc658' }
+      ])
+    }
+  }
 
   return (
     <div style={pageStyles.container}>
       <div style={pageStyles.header}>
-        <div style={pageStyles.headerContent}>
-          <div>
-            <h1 style={pageStyles.title}>Admin Dashboard</h1>
-            <p style={pageStyles.subtitle}>Complete overview of your business</p>
-          </div>
+        <div>
+          <h1 style={pageStyles.title}>Admin Dashboard</h1>
+          <p style={pageStyles.subtitle}>Complete overview of your business</p>
         </div>
         <div style={pageStyles.notificationContainer}>
           <button
             style={pageStyles.notificationButton}
             onClick={() => setShowNotifications(!showNotifications)}
           >
-            <FaBell size={20} />
-            {(pendingCount + pendingOrdersCount) > 0 && (
+            {/* Bell icon SVG */}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style={{ color: '#0077b6' }}>
+              <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z"/>
+            </svg>
+            {(stats.pendingServiceBookings + stats.pendingOrders) > 0 && (
               <span style={pageStyles.notificationBadge}>
-                {pendingCount + pendingOrdersCount}
+                {stats.pendingServiceBookings + stats.pendingOrders}
               </span>
             )}
           </button>
           {showNotifications && (
             <div style={pageStyles.notificationDropdown}>
               <h4 style={pageStyles.notificationTitle}>Notifications</h4>
-              {pendingCount > 0 && (
+              {stats.pendingServiceBookings > 0 && (
                 <div style={pageStyles.notificationItem}>
                   <FaCalendarAlt style={{ marginRight: 8, color: '#f59e0b' }} />
-                  {pendingCount} pending booking{pendingCount > 1 ? 's' : ''}
+                  {stats.pendingServiceBookings} pending booking{stats.pendingServiceBookings > 1 ? 's' : ''}
                 </div>
               )}
-              {pendingOrdersCount > 0 && (
+              {stats.pendingOrders > 0 && (
                 <div style={pageStyles.notificationItem}>
                   <FaShoppingBag style={{ marginRight: 8, color: '#3b82f6' }} />
-                  {pendingOrdersCount} pending order{pendingOrdersCount > 1 ? 's' : ''}
+                  {stats.pendingOrders} pending order{stats.pendingOrders > 1 ? 's' : ''}
                 </div>
               )}
-              {(pendingCount + pendingOrdersCount) === 0 && (
+              {stats.lowStockProducts > 0 && (
+                <div style={pageStyles.notificationItem}>
+                  <FaBoxOpen style={{ marginRight: 8, color: '#ef4444' }} />
+                  {stats.lowStockProducts} low stock product{stats.lowStockProducts > 1 ? 's' : ''}
+                </div>
+              )}
+              {(stats.pendingServiceBookings + stats.pendingOrders + stats.lowStockProducts) === 0 && (
                 <div style={pageStyles.notificationItem}>
                   No new notifications
                 </div>
@@ -532,12 +709,12 @@ function DashboardHome({ stats, pendingCount, pendingOrdersCount }) {
       <div style={pageStyles.statsGrid}>
         <div style={pageStyles.statCard}>
           <div style={{...pageStyles.statIcon, background: '#e0f2fe'}}>
-            <FaUsers size={24} color="#0077b6" />
+            <FaShoppingBag size={24} color="#0077b6" />
           </div>
           <div style={pageStyles.statContent}>
-            <h3 style={pageStyles.statLabel}>Total Users</h3>
-            <p style={pageStyles.statNumber}>{stats.totalUsers}</p>
-            <small style={pageStyles.statChange}>Registered users</small>
+            <h3 style={pageStyles.statLabel}>Total Sales Today</h3>
+            <p style={pageStyles.statNumber}>₱{stats.totalSalesToday.toLocaleString()}</p>
+            <small style={pageStyles.statChange}>Today's revenue</small>
           </div>
         </div>
 
@@ -546,56 +723,106 @@ function DashboardHome({ stats, pendingCount, pendingOrdersCount }) {
             <FaShoppingBag size={24} color="#10b981" />
           </div>
           <div style={pageStyles.statContent}>
-            <h3 style={pageStyles.statLabel}>Products</h3>
-            <p style={pageStyles.statNumber}>{stats.totalProducts}</p>
-            <small style={pageStyles.statChange}>Active products</small>
+            <h3 style={pageStyles.statLabel}>Total Sales This Month</h3>
+            <p style={pageStyles.statNumber}>₱{stats.totalSalesThisMonth.toLocaleString()}</p>
+            <small style={pageStyles.statChange}>Monthly revenue</small>
           </div>
         </div>
 
         <div style={pageStyles.statCard}>
           <div style={{...pageStyles.statIcon, background: '#fffbeb'}}>
-            <FaTools size={24} color="#f59e0b" />
+            <FaCalendarAlt size={24} color="#f59e0b" />
           </div>
           <div style={pageStyles.statContent}>
-            <h3 style={pageStyles.statLabel}>Services</h3>
-            <p style={pageStyles.statNumber}>{stats.totalServices}</p>
-            <small style={pageStyles.statChange}>Available services</small>
+            <h3 style={pageStyles.statLabel}>Pending Service Bookings</h3>
+            <p style={pageStyles.statNumber}>{stats.pendingServiceBookings}</p>
+            <small style={pageStyles.statChange}>Awaiting approval</small>
           </div>
         </div>
 
         <div style={pageStyles.statCard}>
           <div style={{...pageStyles.statIcon, background: '#fef2f2'}}>
-            <FaBoxOpen size={24} color="#ef4444" />
+            <FaShoppingBag size={24} color="#ef4444" />
           </div>
           <div style={pageStyles.statContent}>
-            <h3 style={pageStyles.statLabel}>Revenue</h3>
-            <p style={pageStyles.statNumber}>${stats.revenue.toLocaleString()}</p>
-            <small style={pageStyles.statChange}>This month</small>
+            <h3 style={pageStyles.statLabel}>Pending Orders</h3>
+            <p style={pageStyles.statNumber}>{stats.pendingOrders}</p>
+            <small style={pageStyles.statChange}>For approval</small>
+          </div>
+        </div>
+
+        <div style={pageStyles.statCard}>
+          <div style={{...pageStyles.statIcon, background: '#fce7f3'}}>
+            <FaBoxOpen size={24} color="#db2777" />
+          </div>
+          <div style={pageStyles.statContent}>
+            <h3 style={pageStyles.statLabel}>Low Stock Products</h3>
+            <p style={pageStyles.statNumber}>{stats.lowStockProducts}</p>
+            <small style={pageStyles.statChange}>Stock ≤ 5</small>
           </div>
         </div>
       </div>
 
-      <div style={pageStyles.dashboardContent}>
-        {/* Quick Actions */}
-        <div style={pageStyles.quickActions}>
-          <h3 style={pageStyles.sectionTitle}>Quick Actions</h3>
-          <div style={pageStyles.actionGrid}>
-            {quickActions.map((action, index) => (
-              <button 
-                key={index}
-                style={{
-                  ...pageStyles.actionButton,
-                  background: `linear-gradient(135deg, ${action.color}, ${action.color}dd)`
-                }}
-                onClick={action.onClick}
-              >
-                {action.icon}
-                <span>{action.label}</span>
-                <small>{action.description}</small>
-              </button>
-            ))}
-          </div>
+      {/* Profits Chart */}
+      <div style={pageStyles.chartSection}>
+        <h3 style={pageStyles.sectionTitle}>Profits Trend</h3>
+        <div style={pageStyles.chartControls}>
+          <button onClick={() => setChartView('weekly')} style={chartView === 'weekly' ? pageStyles.activeButton : pageStyles.button}>Weekly</button>
+          <button onClick={() => setChartView('monthly')} style={chartView === 'monthly' ? pageStyles.activeButton : pageStyles.button}>Monthly</button>
+          <button onClick={() => setChartView('yearly')} style={chartView === 'yearly' ? pageStyles.activeButton : pageStyles.button}>Yearly</button>
         </div>
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="date" />
+            <YAxis />
+            <Tooltip formatter={(value) => [`₱${Number(value).toLocaleString()}`, 'Profit']} />
+            <Line type="monotone" dataKey="profit" stroke="#0077b6" strokeWidth={2} dot={{ fill: '#0077b6' }} isAnimationActive={true} animationDuration={1000} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Sales Channel Chart */}
+      <div style={pageStyles.chartSection}>
+        <h3 style={pageStyles.sectionTitle}>Sales by Channel</h3>
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={salesChannelData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="channel" />
+            <YAxis />
+            <Tooltip formatter={(value) => [`₱${Number(value).toLocaleString()}`, 'Sales']} />
+            <Bar dataKey="sales">
+              {salesChannelData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.color} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Payment Method Chart */}
+      <div style={pageStyles.chartSection}>
+        <h3 style={pageStyles.sectionTitle}>Payment Method Distribution</h3>
+        <ResponsiveContainer width="100%" height={300}>
+          <PieChart>
+            <Pie
+              data={paymentMethodData}
+              cx="50%"
+              cy="50%"
+              labelLine={false}
+              label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+              outerRadius={80}
+              fill="#8884d8"
+              dataKey="value"
+            >
+              {paymentMethodData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.color} />
+              ))}
+            </Pie>
+            <Tooltip formatter={(value) => [`₱${Number(value).toLocaleString()}`, 'Amount']} />
+            <Legend />
+          </PieChart>
+        </ResponsiveContainer>
       </div>
     </div>
   )
