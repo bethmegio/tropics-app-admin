@@ -86,22 +86,33 @@ const OrderManagement = () => {
   // API FUNCTIONS
   // ====================
   const fetchOrders = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .order('created_at', { ascending: false });
+  try {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setOrders(data || []);
-    } catch (error) {
-      console.error('Error fetching orders:', error);
-      alert('Error loading orders: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+    if (error) throw error;
+    
+    // Map to expected structure
+    const mappedOrders = (data || []).map(order => ({
+      ...order,
+      customer_name: order.customer_name || 'Walk-in Customer',
+      customer_phone: order.customer_phone || 'N/A',
+      customer_email: order.customer_email || '',
+      channel: order.channel || 'walk-in',
+      total: order.total_amount || 0,
+      order_items: [] // Empty array since you don't have this table yet
+    }));
+    
+    setOrders(mappedOrders);
+  } catch (error) {
+    console.error('Error fetching orders:', error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const updateOrderStatus = async (orderId, status) => {
     try {

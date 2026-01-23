@@ -1,7 +1,7 @@
-// UserSystemManagement.js - React Web Version
+// UserSystemManagement.js - React Web Version with Auto-Sync
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase';
-import { FaUser, FaSearch, FaTrash, FaEdit, FaSync, FaEye, FaEyeSlash, FaPlus, FaCalendar, FaCircle, FaTimes, FaUserPlus, FaArrowLeft } from 'react-icons/fa';
+import { FaUser, FaSearch, FaTrash, FaEdit, FaSync, FaEye, FaEyeSlash, FaPlus, FaCalendar, FaCircle, FaTimes, FaUserPlus, FaArrowLeft, FaCheckCircle, FaExclamationTriangle, FaDatabase } from 'react-icons/fa';
 
 const UserSystemManagement = () => {
   const [users, setUsers] = useState([]);
@@ -23,6 +23,11 @@ const UserSystemManagement = () => {
   });
   const [currentUser, setCurrentUser] = useState(null);
   const [error, setError] = useState(null);
+  const [syncStatus, setSyncStatus] = useState({
+    isSyncing: false,
+    lastSynced: null,
+    syncedCount: 0
+  });
 
   // Fetch current user
   const fetchCurrentUser = useCallback(async () => {
@@ -66,24 +71,62 @@ const UserSystemManagement = () => {
     }
   }, []);
 
-  // Sync users from auth to database
-  const syncAuthUsersToDatabase = async () => {
+  // Check if users table exists and has data
+  const checkUsersTable = async () => {
     try {
-      setLoading(true);
+      const { data, error } = await supabase
+        .from('users')
+        .select('count')
+        .limit(1);
+
+      if (error) {
+        if (error.message?.includes('does not exist') || error.code === 'PGRST116') {
+          console.log('Users table does not exist');
+          return { exists: false, hasData: false };
+        }
+        throw error;
+      }
+
+      const { count } = await supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true });
+
+      return { exists: true, hasData: count > 0 };
+    } catch (err) {
+      console.error('Error checking users table:', err);
+      return { exists: false, hasData: false };
+    }
+  };
+
+  // Auto-sync users from auth to database on page load
+  const autoSyncUsers = async () => {
+    try {
+      setSyncStatus(prev => ({ ...prev, isSyncing: true }));
+      console.log('🔄 Auto-syncing users from auth...');
+
+      // Check table status
+      const tableStatus = await checkUsersTable();
       
-      console.log('🔄 Syncing auth users to database...');
-      
-      // Get all auth users (requires admin privileges)
+      // If table doesn't exist, show error
+      if (!tableStatus.exists) {
+        setError('Users table does not exist. Please create it first.');
+        setSyncStatus(prev => ({ ...prev, isSyncing: false }));
+        return;
+      }
+
+      // Get all auth users
       const { data: authData, error: authError } = await supabase.auth.admin.listUsers();
       
       if (authError) {
         console.error('Error fetching auth users:', authError);
-        alert(`Cannot fetch users: ${authError.message}`);
+        setError(`Cannot fetch users: ${authError.message}`);
+        setSyncStatus(prev => ({ ...prev, isSyncing: false }));
         return;
       }
       
       if (!authData?.users || authData.users.length === 0) {
-        alert('No users found in authentication');
+        console.log('No users found in authentication');
+        setSyncStatus(prev => ({ ...prev, isSyncing: false }));
         return;
       }
       
@@ -91,10 +134,11 @@ const UserSystemManagement = () => {
       
       // Sync each user to database
       let syncedCount = 0;
+      let failedCount = 0;
+      
       for (const authUser of authData.users) {
-        const { error: upsertError } = await supabase
-          .from('users')
-          .upsert({
+        try {
+          const userData = {
             id: authUser.id,
             email: authUser.email,
             full_name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
@@ -104,27 +148,77 @@ const UserSystemManagement = () => {
             role: 'user',
             created_at: authUser.created_at,
             updated_at: new Date().toISOString(),
-          }, { onConflict: 'id' });
-        
-        if (!upsertError) syncedCount++;
+          };
+          
+          // Upsert user (insert or update if exists)
+          const { error: upsertError } = await supabase
+            .from('users')
+            .upsert(userData, { onConflict: 'id' });
+          
+          if (upsertError) {
+            console.error(`Failed to sync user ${authUser.email}:`, upsertError);
+            failedCount++;
+          } else {
+            syncedCount++;
+          }
+        } catch (userError) {
+          console.error(`Error with user ${authUser.email}:`, userError);
+          failedCount++;
+        }
       }
       
-      alert(`Synced ${syncedCount} users from authentication!`);
-      fetchUsers();
+      console.log(`✅ Auto-synced ${syncedCount} users, ${failedCount} failed`);
+      
+      setSyncStatus({
+        isSyncing: false,
+        lastSynced: new Date(),
+        syncedCount
+      });
+      
+      // If table exists but has no data, show success message
+      if (tableStatus.exists && !tableStatus.hasData && syncedCount > 0) {
+        console.log(`✅ Populated users table with ${syncedCount} users from auth`);
+      }
+      
+      return syncedCount;
       
     } catch (err) {
-      console.error('Error syncing users:', err);
-      alert(`Failed to sync users: ${err.message}`);
+      console.error('❌ Auto-sync error:', err);
+      setError(`Auto-sync failed: ${err.message}`);
+      setSyncStatus(prev => ({ ...prev, isSyncing: false }));
+      return 0;
+    }
+  };
+
+  // Manual sync function
+  const manualSyncUsers = async () => {
+    try {
+      setLoading(true);
+      const syncedCount = await autoSyncUsers();
+      
+      if (syncedCount > 0) {
+        alert(`✅ Synced ${syncedCount} users from authentication!`);
+      }
+      
+      // Refresh users list
+      await fetchUsers();
+      
+    } catch (err) {
+      console.error('Error in manual sync:', err);
+      alert(`Sync failed: ${err.message}`);
     } finally {
       setLoading(false);
     }
   };
 
   // Fetch users from database
-  const fetchUsers = useCallback(async () => {
+  const fetchUsers = useCallback(async (forceRefresh = false) => {
     console.log('Fetching users...');
     try {
-      setLoading(true);
+      if (forceRefresh) {
+        setLoading(true);
+      }
+      
       setError(null);
 
       let query = supabase
@@ -141,9 +235,18 @@ const UserSystemManagement = () => {
       if (fetchError) {
         console.error('Database error:', fetchError);
         
-        // If table doesn't exist or is empty, show sync option
+        // If table doesn't exist or is empty, trigger auto-sync
         if (fetchError.message?.includes('does not exist') || fetchError.message?.includes('permission denied')) {
-          setError('Users table not found or permission denied. Try syncing from auth.');
+          setError('Users table not found or permission denied.');
+          
+          // Try to auto-sync
+          if (!syncStatus.isSyncing) {
+            await autoSyncUsers();
+            // Retry fetching after sync
+            if (!showInactive) {
+              await fetchUsers(true);
+            }
+          }
         } else {
           setError(`Failed to load users: ${fetchError.message}`);
         }
@@ -153,6 +256,19 @@ const UserSystemManagement = () => {
       }
       
       console.log(`Found ${data?.length || 0} users`);
+      
+      // If no users found and we haven't synced yet, trigger auto-sync
+      if ((!data || data.length === 0) && !syncStatus.isSyncing && !syncStatus.lastSynced) {
+        console.log('No users found, triggering auto-sync...');
+        await autoSyncUsers();
+        // Retry fetching
+        const { data: newData } = await supabase
+          .from('users')
+          .select('*')
+          .order('created_at', { ascending: false });
+          
+        data = newData;
+      }
       
       // Transform the data
       const transformedUsers = (data || []).map(user => ({
@@ -178,7 +294,7 @@ const UserSystemManagement = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [showInactive]);
+  }, [showInactive, syncStatus]);
 
   // Pull to refresh
   const onRefresh = useCallback(() => {
@@ -187,14 +303,54 @@ const UserSystemManagement = () => {
   }, [fetchUsers]);
 
   useEffect(() => {
-    fetchCurrentUser();
-  }, [fetchCurrentUser]);
+    const initializeUserManagement = async () => {
+      try {
+        setLoading(true);
+        
+        // 1. Fetch current user
+        await fetchCurrentUser();
+        
+        // 2. Check users table status
+        const tableStatus = await checkUsersTable();
+        
+        if (!tableStatus.exists) {
+          setError('Users table does not exist. Please create it first.');
+          setLoading(false);
+          return;
+        }
+        
+        // 3. If table exists but has no data, auto-sync
+        if (tableStatus.exists && !tableStatus.hasData) {
+          console.log('Table exists but empty, auto-syncing...');
+          await autoSyncUsers();
+        }
+        
+        // 4. Fetch users
+        await fetchUsers();
+        
+        // 5. If still no users, try one more sync
+        if (users.length === 0 && !syncStatus.lastSynced) {
+          console.log('Still no users after initial fetch, re-syncing...');
+          await autoSyncUsers();
+          await fetchUsers();
+        }
+        
+      } catch (err) {
+        console.error('Initialization error:', err);
+        setError(`Initialization failed: ${err.message}`);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeUserManagement();
+  }, []);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && !syncStatus.isSyncing) {
       fetchUsers();
     }
-  }, [fetchUsers, currentUser]);
+  }, [fetchUsers, currentUser, syncStatus.isSyncing]);
 
   // Filter users based on search term
   const filteredUsers = users.filter(user => {
@@ -469,6 +625,22 @@ const UserSystemManagement = () => {
       fontSize: '16px',
       color: '#6b7280',
     },
+    syncStatus: {
+      background: '#f0f9ff',
+      padding: '10px 15px',
+      borderRadius: '8px',
+      border: '1px solid #bae6fd',
+      marginBottom: '20px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    syncStatusText: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      color: '#0369a1',
+    },
     errorContainer: {
       background: '#fee2e2',
       padding: '15px',
@@ -658,7 +830,9 @@ const UserSystemManagement = () => {
           borderRadius: '50%',
           animation: 'spin 1s linear infinite',
         }}></div>
-        <div style={styles.loadingText}>Loading users...</div>
+        <div style={styles.loadingText}>
+          {syncStatus.isSyncing ? 'Syncing users from authentication...' : 'Loading users...'}
+        </div>
       </div>
     );
   }
@@ -679,7 +853,25 @@ const UserSystemManagement = () => {
         <h1 style={styles.title}>User Management</h1>
         <div style={styles.subtitle}>
           {users.length} total users ({users.filter(u => u.is_active).length} active)
+          {syncStatus.lastSynced && (
+            <span style={{ fontSize: '12px', color: '#10b981', marginLeft: '10px' }}>
+              <FaCheckCircle size={12} style={{ marginRight: '4px' }} />
+              Last synced: {syncStatus.lastSynced.toLocaleTimeString()}
+            </span>
+          )}
         </div>
+        
+        {syncStatus.isSyncing && (
+          <div style={styles.syncStatus}>
+            <div style={styles.syncStatusText}>
+              <FaSync className="spinning" size={16} />
+              Syncing users from authentication...
+            </div>
+            <div style={{ fontSize: '12px', color: '#0369a1' }}>
+              This may take a moment
+            </div>
+          </div>
+        )}
         
         {currentUser && (
           <div style={{
@@ -701,12 +893,25 @@ const UserSystemManagement = () => {
 
       {error && (
         <div style={styles.errorContainer}>
-          <div style={styles.errorText}>{error}</div>
+          <div style={styles.errorText}>
+            <FaExclamationTriangle style={{ marginRight: '8px' }} />
+            {error}
+          </div>
           <button
             style={styles.syncButton}
-            onClick={syncAuthUsersToDatabase}
+            onClick={manualSyncUsers}
+            disabled={syncStatus.isSyncing}
           >
-            <FaSync /> Sync from Auth
+            {syncStatus.isSyncing ? (
+              <>
+                <FaSync className="spinning" />
+                Syncing...
+              </>
+            ) : (
+              <>
+                <FaSync /> Sync from Auth
+              </>
+            )}
           </button>
         </div>
       )}
@@ -726,25 +931,52 @@ const UserSystemManagement = () => {
         <div style={styles.toolbarActions}>
           <button
             style={styles.refreshButton}
-            onClick={fetchUsers}
-            disabled={loading}
+            onClick={() => fetchUsers(true)}
+            disabled={loading || syncStatus.isSyncing}
           >
-            <FaSync />
+            <FaSync className={loading ? 'spinning' : ''} />
           </button>
 
           <button
             style={showInactive ? styles.filterButtonActive : styles.filterButton}
             onClick={() => setShowInactive(!showInactive)}
+            disabled={syncStatus.isSyncing}
           >
             {showInactive ? <FaEyeSlash /> : <FaEye />}
             {showInactive ? ' Hide' : ' Show'} Inactive
           </button>
 
           <button
-            style={styles.addButton}
+            style={{
+              ...styles.addButton,
+              opacity: syncStatus.isSyncing ? 0.5 : 1,
+              cursor: syncStatus.isSyncing ? 'not-allowed' : 'pointer'
+            }}
             onClick={() => setShowAddUser(true)}
+            disabled={syncStatus.isSyncing}
           >
             <FaUserPlus /> Add User
+          </button>
+
+          <button
+            style={{
+              ...styles.syncButton,
+              background: syncStatus.isSyncing ? '#9ca3af' : '#10b981',
+              opacity: syncStatus.isSyncing ? 0.8 : 1,
+            }}
+            onClick={manualSyncUsers}
+            disabled={syncStatus.isSyncing}
+          >
+            {syncStatus.isSyncing ? (
+              <>
+                <FaSync className="spinning" />
+                Syncing...
+              </>
+            ) : (
+              <>
+                <FaDatabase /> Sync Now
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -753,11 +985,24 @@ const UserSystemManagement = () => {
         <div style={styles.emptyState}>
           <FaUser size={50} color="#d1d5db" />
           <h3>No users found</h3>
+          <p style={{ marginBottom: '20px' }}>
+            {syncStatus.isSyncing ? 'Syncing users...' : 'Click the Sync button to import users from authentication'}
+          </p>
           <button
             style={styles.syncButton}
-            onClick={syncAuthUsersToDatabase}
+            onClick={manualSyncUsers}
+            disabled={syncStatus.isSyncing}
           >
-            <FaSync /> Sync Users from Auth
+            {syncStatus.isSyncing ? (
+              <>
+                <FaSync className="spinning" />
+                Syncing...
+              </>
+            ) : (
+              <>
+                <FaSync /> Sync Users from Auth
+              </>
+            )}
           </button>
         </div>
       ) : (
@@ -1064,7 +1309,7 @@ const UserSystemManagement = () => {
                   cursor: 'pointer',
                 }}
                 onClick={createUser}
-                disabled={loading}
+                disabled={loading || syncStatus.isSyncing}
               >
                 {loading ? 'Creating...' : 'Create User'}
               </button>
@@ -1078,6 +1323,10 @@ const UserSystemManagement = () => {
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
+        }
+
+        .spinning {
+          animation: spin 1s linear infinite;
         }
 
         .user-card {

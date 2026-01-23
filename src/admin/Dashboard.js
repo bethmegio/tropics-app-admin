@@ -8,6 +8,7 @@ import SalesManagement from './SalesManagement'
 import Settings from './Settings'
 import InventoryManagement from './InventoryManagement'
 import ServiceScheduling from './ServiceScheduling'
+import ActivityLog from './ActivityLog'
 import Sidebar from './Sidebar'
 import { FaShoppingBag, FaCalendarAlt, FaBoxOpen } from 'react-icons/fa'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend } from 'recharts'
@@ -79,7 +80,7 @@ const pageStyles = {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
     gap: '20px',
-    marginBottom: '40px',
+    marginBottom: '20px',
   },
   statCard: {
     background: 'white',
@@ -203,6 +204,24 @@ const pageStyles = {
     borderRadius: '6px',
     cursor: 'pointer',
   },
+  debugButtons: {
+    margin: '20px 0 30px 0', 
+    display: 'flex', 
+    gap: '10px',
+    padding: '15px',
+    background: '#f0f9ff',
+    borderRadius: '8px',
+    border: '1px solid #bae6fd'
+  },
+  debugButton: {
+    padding: '10px 20px',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontWeight: '500',
+    fontSize: '14px'
+  }
 };
 
 export default function Dashboard({ user }) {
@@ -222,11 +241,22 @@ export default function Dashboard({ user }) {
   const [loading, setLoading] = useState(true)
   const [authError, setAuthError] = useState(null)
 
+  // 🔍 DEBUG: Log dashboard info
+  console.log('🔍 Dashboard Debug Info:', {
+    userEmail: user?.email,
+    userId: user?.id,
+    currentPath: location.pathname,
+    activePage,
+    loading,
+    authError
+  });
+
   // Update active page based on URL
   useEffect(() => {
     const path = location.pathname.split('/')
     const currentPage = path[path.length - 1] || 'dashboard'
     setActivePage(currentPage)
+    console.log('📍 Active page updated:', currentPage, 'from path:', location.pathname);
   }, [location])
 
   const fetchPendingCount = useCallback(async () => {
@@ -316,6 +346,7 @@ export default function Dashboard({ user }) {
   const handleNavigation = (page) => {
     setActivePage(page)
     navigate(`/dashboard/${page}`)
+    console.log('🧭 Navigating to:', page);
   }
 
   const fetchAdminStats = async () => {
@@ -487,11 +518,11 @@ export default function Dashboard({ user }) {
         marginLeft: sidebarOpen ? '280px' : '80px',
       }}>
         {/* Always show the dashboard content when on dashboard route */}
-        {activePage === 'dashboard' && <DashboardHome stats={adminStats} />}
+        {activePage === 'dashboard' && <DashboardHome stats={adminStats} user={user} />}
         
         <Routes>
           {/* Main dashboard route */}
-          <Route index element={<DashboardHome stats={adminStats} />} />
+          <Route index element={<DashboardHome stats={adminStats} user={user} />} />
           {/* Sub-routes */}
           <Route path="users" element={<UserSystemManagement />} />
           <Route path="products" element={<ProductManagement />} />
@@ -500,14 +531,107 @@ export default function Dashboard({ user }) {
           <Route path="sales" element={<SalesManagement />} />
           <Route path="inventory" element={<InventoryManagement />} />
           <Route path="service-scheduling" element={<ServiceScheduling />} />
+          <Route path="activity-log" element={<ActivityLog />} />
+          
+          {/* 🔍 DEBUG ROUTE */}
+          <Route path="test-debug" element={
+            <div style={{
+              background: 'white',
+              padding: '30px',
+              borderRadius: '12px',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+              minHeight: 'calc(100vh - 60px)'
+            }}>
+              <h1 style={{ fontSize: '32px', color: '#10b981', marginBottom: '20px' }}>
+                ✅ Debug Route Working!
+              </h1>
+              <div style={{
+                background: '#f0f9ff',
+                padding: '20px',
+                borderRadius: '8px',
+                marginBottom: '20px',
+                border: '1px solid #bae6fd'
+              }}>
+                <h3 style={{ color: '#0077b6', marginBottom: '10px' }}>Debug Information:</h3>
+                <p><strong>Current Time:</strong> {new Date().toLocaleString()}</p>
+                <p><strong>User Email:</strong> {user?.email || 'Not logged in'}</p>
+                <p><strong>User ID:</strong> {user?.id || 'N/A'}</p>
+                <p><strong>Current Path:</strong> {window.location.pathname}</p>
+              </div>
+              <div style={{
+                background: '#f0fdf4',
+                padding: '20px',
+                borderRadius: '8px',
+                border: '1px solid #a7f3d0'
+              }}>
+                <h3 style={{ color: '#10b981', marginBottom: '10px' }}>Next Steps:</h3>
+                <ul style={{ marginLeft: '20px', lineHeight: '1.8' }}>
+                  <li>Go to <a href="/dashboard/activity-log" style={{ color: '#0077b6', fontWeight: '500' }}>/dashboard/activity-log</a> to check Activity Log</li>
+                  <li>Check browser console (F12) for any errors</li>
+                  <li>Check if you can see the Activity Logs link in the sidebar</li>
+                  <li>Verify your database connection is working</li>
+                </ul>
+              </div>
+              <div style={{
+                marginTop: '20px',
+                padding: '15px',
+                background: '#fef3c7',
+                borderRadius: '8px',
+                border: '1px solid #fbbf24'
+              }}>
+                <h4 style={{ color: '#d97706', marginBottom: '10px' }}>Quick Actions:</h4>
+                <button 
+                  onClick={() => window.location.href = '/dashboard/activity-log'}
+                  style={{
+                    marginRight: '10px',
+                    padding: '8px 16px',
+                    background: '#0077b6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Go to Activity Logs
+                </button>
+                <button 
+                  onClick={() => window.location.href = '/dashboard'}
+                  style={{
+                    marginRight: '10px',
+                    padding: '8px 16px',
+                    background: '#6b7280',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Back to Dashboard
+                </button>
+                <button 
+                  onClick={() => window.open('https://supabase.com/dashboard/project/_/editor', '_blank')}
+                  style={{
+                    padding: '8px 16px',
+                    background: '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Open Supabase
+                </button>
+              </div>
+            </div>
+          } />
         </Routes>
       </div>
     </div>
   )
 }
 
-// Dashboard Home Component (keep the same as before)
-function DashboardHome({ stats }) {
+// Dashboard Home Component - UPDATED to include user prop
+function DashboardHome({ stats, user }) {
   const [showNotifications, setShowNotifications] = useState(false)
   const [chartData, setChartData] = useState([])
   const [chartView, setChartView] = useState('weekly')
@@ -658,6 +782,9 @@ function DashboardHome({ stats }) {
         <div>
           <h1 style={pageStyles.title}>Admin Dashboard</h1>
           <p style={pageStyles.subtitle}>Complete overview of your business</p>
+          <p style={{ fontSize: '14px', color: '#6b7280', marginTop: '5px' }}>
+            Logged in as: <strong>{user?.email}</strong>
+          </p>
         </div>
         <div style={pageStyles.notificationContainer}>
           <button
@@ -761,6 +888,41 @@ function DashboardHome({ stats }) {
             <small style={pageStyles.statChange}>Stock ≤ 5</small>
           </div>
         </div>
+      </div>
+
+      {/* 🔍 DEBUG BUTTONS */}
+      <div style={pageStyles.debugButtons}>
+        <button 
+          onClick={() => window.location.href = '/dashboard/activity-log'}
+          style={{...pageStyles.debugButton, background: '#0077b6'}}
+        >
+          🚀 Go to Activity Logs
+        </button>
+        <button 
+          onClick={() => window.location.href = '/dashboard/test-debug'}
+          style={{...pageStyles.debugButton, background: '#10b981'}}
+        >
+          🐛 Test Debug Route
+        </button>
+        <button 
+          onClick={() => {
+            console.log('🔄 Manual refresh clicked');
+            window.location.reload();
+          }}
+          style={{...pageStyles.debugButton, background: '#f59e0b'}}
+        >
+          🔄 Refresh Page
+        </button>
+        <button 
+          onClick={() => {
+            console.log('📊 Checking console for errors...');
+            console.log('User:', user);
+            console.log('Stats:', stats);
+          }}
+          style={{...pageStyles.debugButton, background: '#8b5cf6'}}
+        >
+          📊 Check Console
+        </button>
       </div>
 
       {/* Profits Chart */}

@@ -1,95 +1,143 @@
-// src/admin/Sidebar.js
 import React from 'react';
-import { 
-  FaTachometerAlt, 
-  FaUsers, 
-  FaShoppingBag, 
-  FaWrench, 
-  FaChartLine, 
-  FaBoxOpen, 
-  FaCalendarAlt, 
-  FaCog, 
+import { Link, useLocation } from 'react-router-dom';
+import {
+  FaTachometerAlt,
+  FaUsers,
+  FaShoppingBag,
+  FaBoxOpen,
+  FaConciergeBell,
+  FaCalendarCheck,
+  FaChartBar,
+  FaHistory,
+  FaCog,
   FaSignOutAlt,
   FaBars,
   FaTimes,
-  FaBell,
-  FaShoppingCart
+  FaWarehouse, // Changed from FaCog to FaWarehouse for inventory
+  FaClipboardList // Alternative option
 } from 'react-icons/fa';
 
-const Sidebar = ({ 
-  sidebarOpen, 
-  activePage, 
-  pendingCount, 
-  pendingOrdersCount, 
-  user, 
-  onToggle, 
-  onNavigate, 
-  onLogout 
-}) => {
+const Sidebar = ({ sidebarOpen, activePage, pendingCount, pendingOrdersCount, user, onToggle, onNavigate, onLogout }) => {
+  const location = useLocation();
+  
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: <FaTachometerAlt /> },
-    { id: 'users', label: 'User Management', icon: <FaUsers /> },
-    { id: 'products', label: 'Products', icon: <FaShoppingBag /> },
-    { id: 'services', label: 'Services', icon: <FaWrench /> },
-    { id: 'sales', label: 'Sales', icon: <FaChartLine /> },
-    { id: 'inventory', label: 'Inventory', icon: <FaBoxOpen /> },
-    { id: 'service-scheduling', label: 'Service Scheduling', icon: <FaCalendarAlt /> },
-    { id: 'settings', label: 'Settings', icon: <FaCog /> },
+    { id: 'dashboard', label: 'Dashboard', icon: <FaTachometerAlt />, path: '/dashboard' },
+    { id: 'users', label: 'User Management', icon: <FaUsers />, path: '/dashboard/users' },
+    { id: 'sales', label: 'Sales Management', icon: <FaShoppingBag />, path: '/dashboard/sales' },
+    { id: 'products', label: 'Products & Services', icon: <FaBoxOpen />, path: '/dashboard/products' },
+    { id: 'inventory', label: 'Inventory Management', icon: <FaWarehouse />, path: '/dashboard/inventory' },
+    { id: 'reports', label: 'Reports', icon: <FaChartBar />, path: '/dashboard/reports' },
+    { id: 'activity-log', label: 'Activity Logs', icon: <FaHistory />, path: '/dashboard/activity-log' },
+    // Changed from FaCog to FaWarehouse for inventory management
+   
   ];
 
   const styles = {
     sidebar: {
       position: 'fixed',
-      left: 0,
       top: 0,
+      left: 0,
+      width: sidebarOpen ? '280px' : '80px',
       height: '100vh',
       background: 'linear-gradient(180deg, #023e8a 0%, #0077b6 100%)',
-      width: sidebarOpen ? '280px' : '80px',
-      transition: 'width 0.3s ease',
-      zIndex: 1000,
-      boxShadow: '2px 0 10px rgba(0,0,0,0.1)',
-      display: 'flex',
-      flexDirection: 'column',
       color: 'white',
-    },
-    sidebarHeader: {
-      padding: '20px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      borderBottom: '1px solid rgba(255,255,255,0.1)',
+      transition: 'width 0.3s ease',
+      overflowX: 'hidden',
+      zIndex: 1000,
+      boxShadow: '4px 0 20px rgba(0,0,0,0.1)',
     },
     toggleButton: {
+      position: 'absolute',
+      top: '20px',
+      right: '20px',
       background: 'rgba(255,255,255,0.1)',
       border: 'none',
       color: 'white',
-      width: '40px',
-      height: '40px',
-      borderRadius: '8px',
+      borderRadius: '6px',
+      padding: '8px',
+      cursor: 'pointer',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      cursor: 'pointer',
-      fontSize: '18px',
+    },
+    logoContainer: {
+      padding: '30px 20px',
+      borderBottom: '1px solid rgba(255,255,255,0.1)',
+      textAlign: 'center',
     },
     logo: {
+      fontSize: sidebarOpen ? '24px' : '20px',
+      fontWeight: 'bold',
+      color: 'white',
+      marginBottom: sidebarOpen ? '10px' : '0',
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+    },
+    brandName: {
+      fontSize: '12px',
+      color: 'rgba(255,255,255,0.7)',
+      letterSpacing: '1px',
+      display: sidebarOpen ? 'block' : 'none',
+    },
+    menu: {
+      padding: '20px 0',
+    },
+    menuItem: {
       display: 'flex',
       alignItems: 'center',
-      gap: '12px',
-      opacity: sidebarOpen ? 1 : 0,
-      transition: 'opacity 0.3s ease',
+      padding: '15px 20px',
+      color: 'rgba(255,255,255,0.8)',
+      textDecoration: 'none',
+      transition: 'all 0.3s',
+      position: 'relative',
+      cursor: 'pointer',
       whiteSpace: 'nowrap',
     },
-    logoText: {
-      fontSize: '20px',
-      fontWeight: '700',
+    activeMenuItem: {
+      background: 'rgba(255,255,255,0.15)',
+      color: 'white',
+      borderLeft: '4px solid #48cae4',
     },
-    userInfo: {
-      padding: '20px',
-      borderBottom: '1px solid rgba(255,255,255,0.1)',
+    menuIcon: {
+      fontSize: '18px',
+      minWidth: '24px',
+      marginRight: sidebarOpen ? '12px' : '0',
+    },
+    menuLabel: {
+      fontSize: '14px',
+      fontWeight: '500',
+      display: sidebarOpen ? 'block' : 'none',
+      flex: 1,
+    },
+    badge: {
+      position: 'absolute',
+      right: '20px',
+      background: '#ef4444',
+      color: 'white',
+      borderRadius: '10px',
+      minWidth: '20px',
+      height: '20px',
+      fontSize: '11px',
       display: 'flex',
       alignItems: 'center',
-      gap: '12px',
+      justifyContent: 'center',
+      fontWeight: 'bold',
+    },
+    userSection: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      padding: '20px',
+      background: 'rgba(0,0,0,0.2)',
+      borderTop: '1px solid rgba(255,255,255,0.1)',
+    },
+    userInfo: {
+      display: 'flex',
+      alignItems: 'center',
+      marginBottom: '15px',
+      opacity: sidebarOpen ? 1 : 0,
+      transition: 'opacity 0.3s',
     },
     userAvatar: {
       width: '40px',
@@ -99,216 +147,113 @@ const Sidebar = ({
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      fontWeight: '600',
-    },
-    userDetails: {
-      opacity: sidebarOpen ? 1 : 0,
-      transition: 'opacity 0.3s ease',
-      whiteSpace: 'nowrap',
-      overflow: 'hidden',
+      marginRight: '12px',
+      fontWeight: 'bold',
+      fontSize: '16px',
     },
     userName: {
       fontSize: '14px',
       fontWeight: '600',
-      marginBottom: '2px',
     },
-    userRole: {
+    userEmail: {
       fontSize: '12px',
-      opacity: 0.8,
-    },
-    menu: {
-      flex: 1,
-      padding: '20px 0',
-      overflowY: 'auto',
-    },
-    menuItem: {
-      display: 'flex',
-      alignItems: 'center',
-      padding: '14px 20px',
-      textDecoration: 'none',
-      color: 'rgba(255,255,255,0.8)',
-      cursor: 'pointer',
-      transition: 'all 0.3s ease',
-      borderLeft: '4px solid transparent',
-    },
-    menuItemActive: {
-      background: 'rgba(255,255,255,0.1)',
-      color: 'white',
-      borderLeft: '4px solid #00b4d8',
-    },
-    menuIcon: {
-      fontSize: '18px',
-      minWidth: '24px',
-    },
-    menuLabel: {
-      marginLeft: '16px',
-      fontSize: '14px',
-      fontWeight: '500',
-      opacity: sidebarOpen ? 1 : 0,
-      transition: 'opacity 0.3s ease',
-      whiteSpace: 'nowrap',
-    },
-    badge: {
-      marginLeft: 'auto',
-      background: '#ef4444',
-      color: 'white',
-      fontSize: '10px',
-      fontWeight: 'bold',
-      padding: '2px 6px',
-      borderRadius: '10px',
-      minWidth: '18px',
-      textAlign: 'center',
-      opacity: sidebarOpen ? 1 : 0,
-      transition: 'opacity 0.3s ease',
-    },
-    notifications: {
-      padding: '20px',
-      borderTop: '1px solid rgba(255,255,255,0.1)',
-      opacity: sidebarOpen ? 1 : 0,
-      transition: 'opacity 0.3s ease',
-    },
-    notificationItem: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '10px',
-      fontSize: '13px',
-      marginBottom: '10px',
-      padding: '8px',
-      borderRadius: '6px',
-      background: 'rgba(255,255,255,0.05)',
-    },
-    notificationCount: {
-      background: '#ef4444',
-      color: 'white',
-      fontSize: '11px',
-      fontWeight: 'bold',
-      padding: '2px 6px',
-      borderRadius: '10px',
-      minWidth: '20px',
-      textAlign: 'center',
-    },
-    footer: {
-      padding: '20px',
-      borderTop: '1px solid rgba(255,255,255,0.1)',
+      color: 'rgba(255,255,255,0.7)',
+      marginTop: '2px',
     },
     logoutButton: {
       display: 'flex',
       alignItems: 'center',
-      gap: '12px',
+      justifyContent: sidebarOpen ? 'flex-start' : 'center',
       width: '100%',
-      background: 'rgba(239, 68, 68, 0.2)',
-      border: 'none',
-      color: 'white',
       padding: '12px',
-      borderRadius: '8px',
+      background: 'rgba(255,255,255,0.1)',
+      border: 'none',
+      borderRadius: '6px',
+      color: 'white',
       cursor: 'pointer',
+      transition: 'all 0.3s',
       fontSize: '14px',
       fontWeight: '500',
-      transition: 'all 0.3s ease',
+    },
+    logoutIcon: {
+      marginRight: sidebarOpen ? '8px' : '0',
+      fontSize: '16px',
     },
     logoutText: {
-      opacity: sidebarOpen ? 1 : 0,
-      transition: 'opacity 0.3s ease',
-      whiteSpace: 'nowrap',
+      display: sidebarOpen ? 'block' : 'none',
     },
+  };
+
+  const getInitials = (name) => {
+    if (!name) return 'U';
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const getBadgeCount = (id) => {
+    if (id === 'booking') return pendingCount;
+    if (id === 'sales') return pendingOrdersCount;
+    return 0;
   };
 
   return (
     <div style={styles.sidebar}>
-      {/* Header with logo and toggle button */}
-      <div style={styles.sidebarHeader}>
-        <div style={styles.logo}>
-          <div style={{ fontSize: '24px' }}>🚀</div>
-          {sidebarOpen && <span style={styles.logoText}>Admin Panel</span>}
-        </div>
-        <button 
-          style={styles.toggleButton} 
-          onClick={onToggle}
-          title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-        >
-          {sidebarOpen ? <FaTimes /> : <FaBars />}
-        </button>
+      <button style={styles.toggleButton} onClick={onToggle}>
+        {sidebarOpen ? <FaTimes size={16} /> : <FaBars size={16} />}
+      </button>
+      
+      <div style={styles.logoContainer}>
+        <div style={styles.logo}>ADMIN PANEL</div>
+        <div style={styles.brandName}>Business Management System</div>
       </div>
-
-      {/* User info */}
-      <div style={styles.userInfo}>
-        <div style={styles.userAvatar}>
-          {user?.email?.[0]?.toUpperCase() || 'A'}
-        </div>
-        {sidebarOpen && (
-          <div style={styles.userDetails}>
-            <div style={styles.userName}>
-              {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Admin'}
+      
+      <div style={styles.menu}>
+        {menuItems.map((item) => {
+          const isActive = location.pathname === item.path;
+          const badgeCount = getBadgeCount(item.id);
+          
+          return (
+            <Link
+              key={item.id}
+              to={item.path}
+              style={{
+                ...styles.menuItem,
+                ...(isActive ? styles.activeMenuItem : {}),
+              }}
+              onClick={() => onNavigate(item.id)}
+            >
+              <div style={styles.menuIcon}>{item.icon}</div>
+              <div style={styles.menuLabel}>{item.label}</div>
+              {badgeCount > 0 && (
+                <div style={styles.badge}>{badgeCount}</div>
+              )}
+            </Link>
+          );
+        })}
+      </div>
+      
+      <div style={styles.userSection}>
+        {sidebarOpen && user && (
+          <div style={styles.userInfo}>
+            <div style={styles.userAvatar}>
+              {getInitials(user.full_name || user.email)}
             </div>
-            <div style={styles.userRole}>
-              {user?.user_metadata?.is_admin ? 'Administrator' : 'Admin'}
+            <div>
+              <div style={styles.userName}>{user.full_name || 'Admin User'}</div>
+              <div style={styles.userEmail}>{user.email}</div>
             </div>
           </div>
         )}
-      </div>
-
-      {/* Menu items */}
-      <div style={styles.menu}>
-        {menuItems.map((item) => (
-          <div
-            key={item.id}
-            style={{
-              ...styles.menuItem,
-              ...(activePage === item.id ? styles.menuItemActive : {}),
-            }}
-            onClick={() => onNavigate(item.id)}
-            title={!sidebarOpen ? item.label : ''}
-          >
-            <div style={styles.menuIcon}>{item.icon}</div>
-            {sidebarOpen && <span style={styles.menuLabel}>{item.label}</span>}
-            
-            {/* Badges for pending items */}
-            {(item.id === 'dashboard' && (pendingCount > 0 || pendingOrdersCount > 0) && sidebarOpen) && (
-              <div style={styles.badge}>
-                {pendingCount + pendingOrdersCount}
-              </div>
-            )}
+        
+        <button style={styles.logoutButton} onClick={onLogout}>
+          <div style={styles.logoutIcon}>
+            <FaSignOutAlt />
           </div>
-        ))}
-      </div>
-
-      {/* Notifications section */}
-      {sidebarOpen && (pendingCount > 0 || pendingOrdersCount > 0) && (
-        <div style={styles.notifications}>
-          <div style={{ 
-            fontSize: '12px', 
-            opacity: 0.7, 
-            marginBottom: '12px',
-            fontWeight: '500'
-          }}>
-            Pending Actions
-          </div>
-          {pendingCount > 0 && (
-            <div style={styles.notificationItem}>
-              <FaCalendarAlt />
-              <span>Pending Bookings</span>
-              <div style={styles.notificationCount}>{pendingCount}</div>
-            </div>
-          )}
-          {pendingOrdersCount > 0 && (
-            <div style={styles.notificationItem}>
-              <FaShoppingCart />
-              <span>Pending Orders</span>
-              <div style={styles.notificationCount}>{pendingOrdersCount}</div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Logout button */}
-      <div style={styles.footer}>
-        <button 
-          style={styles.logoutButton} 
-          onClick={onLogout}
-          title={!sidebarOpen ? 'Logout' : ''}
-        >
-          <FaSignOutAlt />
-          {sidebarOpen && <span style={styles.logoutText}>Logout</span>}
+          {sidebarOpen && <div style={styles.logoutText}>Logout</div>}
         </button>
       </div>
     </div>

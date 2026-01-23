@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
+import { FaConciergeBell, FaPlus, FaEdit, FaTrash, FaClock, FaDollarSign } from 'react-icons/fa';
 
 const ServiceManagement = () => {
   const [services, setServices] = useState([]);
@@ -11,11 +12,9 @@ const ServiceManagement = () => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    image_url: '',
     price: '',
     duration: '',
-    available: true,
-    popular: false,
+    is_available: true,
     category: ''
   });
 
@@ -45,9 +44,12 @@ const ServiceManagement = () => {
     e.preventDefault();
     try {
       const serviceData = {
-        ...formData,
+        name: formData.name,
+        description: formData.description,
         price: parseFloat(formData.price) || 0,
-        duration: formData.duration || null
+        duration: formData.duration,
+        is_available: formData.is_available,
+        category: formData.category || 'general'
       };
 
       if (editingService) {
@@ -78,11 +80,9 @@ const ServiceManagement = () => {
     setFormData({
       name: service.name || '',
       description: service.description || '',
-      image_url: service.image_url || '',
       price: service.price || '',
       duration: service.duration || '',
-      available: service.available !== false,
-      popular: service.popular || false,
+      is_available: service.is_available !== false,
       category: service.category || ''
     });
     setShowForm(true);
@@ -112,28 +112,32 @@ const ServiceManagement = () => {
     }
   };
 
-  const cancelDelete = () => {
-    setShowDeleteConfirm(false);
-    setServiceToDelete(null);
-  };
-
   const resetForm = () => {
     setFormData({
       name: '',
       description: '',
-      image_url: '',
       price: '',
       duration: '',
-      available: true,
-      popular: false,
+      is_available: true,
       category: ''
     });
     setEditingService(null);
     setShowForm(false);
   };
 
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  const toggleAvailability = async (serviceId, currentStatus) => {
+    try {
+      const { error } = await supabase
+        .from('services')
+        .update({ is_available: !currentStatus })
+        .eq('id', serviceId);
+
+      if (error) throw error;
+      fetchServices();
+    } catch (error) {
+      console.error('Error toggling availability:', error);
+      alert('Error updating service: ' + error.message);
+    }
   };
 
   if (loading) {
@@ -152,14 +156,17 @@ const ServiceManagement = () => {
       <div style={styles.header}>
         <div style={styles.headerContent}>
           <div>
-            <h1 style={styles.title}>Service Management</h1>
-            <p style={styles.subtitle}>Configure and manage services</p>
+            <h1 style={styles.title}>
+              <FaConciergeBell style={{ marginRight: '10px' }} />
+              Service Management
+            </h1>
+            <p style={styles.subtitle}>Manage your service offerings</p>
           </div>
           <button
             style={styles.addButton}
             onClick={() => setShowForm(true)}
           >
-            + Add Service
+            <FaPlus /> Add Service
           </button>
         </div>
       </div>
@@ -171,33 +178,22 @@ const ServiceManagement = () => {
             <button style={styles.closeButton} onClick={resetForm}>×</button>
           </div>
           <form onSubmit={handleSubmit} style={styles.form}>
-            <div style={styles.formRow}>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Service Name *</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => handleInputChange('name', e.target.value)}
-                  style={styles.input}
-                  required
-                />
-              </div>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Category</label>
-                <input
-                  type="text"
-                  value={formData.category}
-                  onChange={(e) => handleInputChange('category', e.target.value)}
-                  style={styles.input}
-                />
-              </div>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Service Name *</label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({...formData, name: e.target.value})}
+                style={styles.input}
+                required
+              />
             </div>
 
             <div style={styles.formGroup}>
               <label style={styles.label}>Description</label>
               <textarea
                 value={formData.description}
-                onChange={(e) => handleInputChange('description', e.target.value)}
+                onChange={(e) => setFormData({...formData, description: e.target.value})}
                 style={styles.textarea}
                 rows="3"
               />
@@ -209,9 +205,10 @@ const ServiceManagement = () => {
                 <input
                   type="number"
                   value={formData.price}
-                  onChange={(e) => handleInputChange('price', e.target.value)}
+                  onChange={(e) => setFormData({...formData, price: e.target.value})}
                   style={styles.input}
                   step="0.01"
+                  min="0"
                 />
               </div>
               <div style={styles.formGroup}>
@@ -219,39 +216,37 @@ const ServiceManagement = () => {
                 <input
                   type="text"
                   value={formData.duration}
-                  onChange={(e) => handleInputChange('duration', e.target.value)}
+                  onChange={(e) => setFormData({...formData, duration: e.target.value})}
                   style={styles.input}
-                  placeholder="e.g., 2 hours"
+                  placeholder="e.g., 1 hour, 30 mins"
                 />
               </div>
             </div>
 
             <div style={styles.formGroup}>
-              <label style={styles.label}>Image URL</label>
-              <input
-                type="url"
-                value={formData.image_url}
-                onChange={(e) => handleInputChange('image_url', e.target.value)}
+              <label style={styles.label}>Category</label>
+              <select
+                value={formData.category}
+                onChange={(e) => setFormData({...formData, category: e.target.value})}
                 style={styles.input}
-              />
+              >
+                <option value="">Select Category</option>
+                <option value="repair">Repair</option>
+                <option value="maintenance">Maintenance</option>
+                <option value="installation">Installation</option>
+                <option value="consultation">Consultation</option>
+                <option value="other">Other</option>
+              </select>
             </div>
 
             <div style={styles.checkboxGroup}>
               <label style={styles.checkboxLabel}>
                 <input
                   type="checkbox"
-                  checked={formData.available}
-                  onChange={(e) => handleInputChange('available', e.target.checked)}
+                  checked={formData.is_available}
+                  onChange={(e) => setFormData({...formData, is_available: e.target.checked})}
                 />
-                Available
-              </label>
-              <label style={styles.checkboxLabel}>
-                <input
-                  type="checkbox"
-                  checked={formData.popular}
-                  onChange={(e) => handleInputChange('popular', e.target.checked)}
-                />
-                Popular
+                Available for booking
               </label>
             </div>
 
@@ -269,17 +264,17 @@ const ServiceManagement = () => {
 
       {showDeleteConfirm && serviceToDelete && (
         <div style={styles.modalOverlay}>
-          <div style={styles.modal}>
+          <div style={styles.confirmModal}>
             <h3 style={styles.modalTitle}>Delete Service</h3>
-            <p style={styles.modalMessage}>
+            <p style={styles.confirmMessage}>
               Are you sure you want to delete "{serviceToDelete.name}"? This action cannot be undone.
             </p>
             <div style={styles.modalActions}>
-              <button style={styles.cancelButton} onClick={cancelDelete}>
+              <button style={styles.cancelButton} onClick={() => setShowDeleteConfirm(false)}>
                 Cancel
               </button>
               <button style={styles.deleteConfirmButton} onClick={confirmDelete}>
-                Delete
+                Delete Service
               </button>
             </div>
           </div>
@@ -298,15 +293,20 @@ const ServiceManagement = () => {
                 <div style={styles.serviceHeader}>
                   <h3 style={styles.serviceName}>{service.name}</h3>
                   <div style={styles.serviceBadges}>
-                    {service.popular && <span style={styles.badge}>Popular</span>}
-                    {!service.available && <span style={styles.badgeUnavailable}>Unavailable</span>}
+                    {!service.is_available && <span style={styles.unavailableBadge}>Unavailable</span>}
+                    <span style={styles.categoryBadge}>{service.category || 'General'}</span>
                   </div>
                 </div>
                 <p style={styles.serviceDescription}>{service.description}</p>
                 <div style={styles.serviceDetails}>
-                  {service.price && <span style={styles.detail}>₱{service.price}</span>}
-                  {service.duration && <span style={styles.detail}>{service.duration}</span>}
-                  {service.category && <span style={styles.detail}>{service.category}</span>}
+                  <span style={styles.detail}><FaDollarSign /> ₱{service.price}</span>
+                  <span style={styles.detail}><FaClock /> {service.duration}</span>
+                  <span style={{
+                    ...styles.detail,
+                    color: service.is_available ? '#10b981' : '#ef4444'
+                  }}>
+                    {service.is_available ? 'Available' : 'Unavailable'}
+                  </span>
                 </div>
               </div>
               <div style={styles.serviceActions}>
@@ -314,13 +314,19 @@ const ServiceManagement = () => {
                   style={styles.editButton}
                   onClick={() => handleEdit(service)}
                 >
-                  Edit
+                  <FaEdit /> Edit
+                </button>
+                <button
+                  style={service.is_available ? styles.unavailableButton : styles.availableButton}
+                  onClick={() => toggleAvailability(service.id, service.is_available)}
+                >
+                  {service.is_available ? 'Mark Unavailable' : 'Mark Available'}
                 </button>
                 <button
                   style={styles.deleteButton}
-                  onClick={() => handleDelete(service.id)}
+                  onClick={() => handleDelete(service)}
                 >
-                  Delete
+                  <FaTrash /> Delete
                 </button>
               </div>
             </div>
@@ -352,6 +358,8 @@ const styles = {
     color: '#023e8a',
     margin: '0 0 8px 0',
     fontWeight: '700',
+    display: 'flex',
+    alignItems: 'center',
   },
   subtitle: {
     fontSize: '16px',
@@ -366,6 +374,9 @@ const styles = {
     borderRadius: '8px',
     cursor: 'pointer',
     fontWeight: '600',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
   },
   loading: {
     textAlign: 'center',
@@ -374,7 +385,7 @@ const styles = {
   spinner: {
     width: '40px',
     height: '40px',
-    border: '4px solid #f3f4f6',
+    border: '4px solid #e5e7eb',
     borderTop: '4px solid #0077b6',
     borderRadius: '50%',
     animation: 'spin 1s linear infinite',
@@ -434,14 +445,14 @@ const styles = {
     resize: 'vertical',
   },
   checkboxGroup: {
-    display: 'flex',
-    gap: '20px',
+    marginTop: '10px',
   },
   checkboxLabel: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
     fontSize: '14px',
+    color: '#374151',
   },
   formActions: {
     display: 'flex',
@@ -463,6 +474,51 @@ const styles = {
     padding: '12px 24px',
     borderRadius: '8px',
     cursor: 'pointer',
+  },
+  modalOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  confirmModal: {
+    background: 'white',
+    padding: '30px',
+    borderRadius: '12px',
+    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+    maxWidth: '400px',
+    width: '90%',
+  },
+  modalTitle: {
+    margin: '0 0 16px 0',
+    fontSize: '20px',
+    fontWeight: '600',
+    color: '#111827',
+  },
+  confirmMessage: {
+    margin: '0 0 24px 0',
+    color: '#6b7280',
+    lineHeight: '1.5',
+  },
+  modalActions: {
+    display: 'flex',
+    gap: '12px',
+    justifyContent: 'flex-end',
+  },
+  deleteConfirmButton: {
+    background: '#ef4444',
+    color: 'white',
+    border: 'none',
+    padding: '12px 24px',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontWeight: '600',
   },
   servicesList: {
     display: 'flex',
@@ -497,17 +553,17 @@ const styles = {
     display: 'flex',
     gap: '8px',
   },
-  badge: {
-    background: '#10b981',
-    color: 'white',
+  categoryBadge: {
+    background: '#e0f2fe',
+    color: '#0369a1',
     padding: '4px 8px',
     borderRadius: '12px',
     fontSize: '12px',
     fontWeight: '500',
   },
-  badgeUnavailable: {
-    background: '#ef4444',
-    color: 'white',
+  unavailableBadge: {
+    background: '#fee2e2',
+    color: '#991b1b',
     padding: '4px 8px',
     borderRadius: '12px',
     fontSize: '12px',
@@ -523,8 +579,12 @@ const styles = {
     gap: '16px',
     fontSize: '14px',
     color: '#374151',
+    alignItems: 'center',
   },
   detail: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
     fontWeight: '500',
   },
   serviceActions: {
@@ -538,6 +598,25 @@ const styles = {
     padding: '8px 16px',
     borderRadius: '6px',
     cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+  },
+  availableButton: {
+    background: '#10b981',
+    color: 'white',
+    border: 'none',
+    padding: '8px 16px',
+    borderRadius: '6px',
+    cursor: 'pointer',
+  },
+  unavailableButton: {
+    background: '#6b7280',
+    color: 'white',
+    border: 'none',
+    padding: '8px 16px',
+    borderRadius: '6px',
+    cursor: 'pointer',
   },
   deleteButton: {
     background: '#ef4444',
@@ -546,56 +625,14 @@ const styles = {
     padding: '8px 16px',
     borderRadius: '6px',
     cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
   },
   emptyState: {
     textAlign: 'center',
     padding: '50px',
     color: '#6b7280',
-  },
-  modalOverlay: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  modal: {
-    background: 'white',
-    padding: '30px',
-    borderRadius: '12px',
-    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-    maxWidth: '400px',
-    width: '90%',
-  },
-  modalTitle: {
-    margin: '0 0 16px 0',
-    fontSize: '20px',
-    fontWeight: '600',
-    color: '#111827',
-  },
-  modalMessage: {
-    margin: '0 0 24px 0',
-    color: '#6b7280',
-    lineHeight: '1.5',
-  },
-  modalActions: {
-    display: 'flex',
-    gap: '12px',
-    justifyContent: 'flex-end',
-  },
-  deleteConfirmButton: {
-    background: '#ef4444',
-    color: 'white',
-    border: 'none',
-    padding: '12px 24px',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontWeight: '600',
   },
 };
 

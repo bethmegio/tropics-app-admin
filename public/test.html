@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <h1>Direct Supabase Test</h1>
+  <button onclick="testSupabase()">Test Connection</button>
+  <div id="result"></div>
+  
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    const supabaseUrl = 'YOUR_SUPABASE_URL';
+    const supabaseKey = 'YOUR_SUPABASE_ANON_KEY';
+    const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+    
+    async function testSupabase() {
+      const result = document.getElementById('result');
+      result.innerHTML = 'Testing...';
+      
+      try {
+        const { data, error } = await supabase
+          .from('activity_logs')
+          .select('*')
+          .limit(3);
+        
+        if (error) {
+          result.innerHTML = `Error: ${error.message}<br>Code: ${error.code}`;
+        } else {
+          result.innerHTML = `Success! Found ${data.length} records:<br>`;
+          data.forEach(item => {
+            result.innerHTML += `<div>${item.activity_type}: ${item.description}</div>`;
+          });
+        }
+      } catch (err) {
+        result.innerHTML = `Exception: ${err.message}`;
+      }
+    }
+  </script>
+</body>
+</html>
