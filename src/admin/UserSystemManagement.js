@@ -55,10 +55,10 @@ const UserSystemManagement = () => {
         // 2. Try to fetch existing users from database
         let dbUsers = [];
         try {
-          const { data, error: dbError } = await supabase
-            .from('users')
-            .select('*')
-            .order('created_at', { ascending: false });
+         const { data, error: dbError } = await supabase
+  .from('profiles')  // ← CORRECT TABLE NAME
+  .select('*')
+  .order('created_at', { ascending: false });
             
           if (dbError) {
             console.log('Database query failed, might be empty or not exist:', dbError.message);

@@ -5,7 +5,8 @@ import UserSystemManagement from './UserSystemManagement'
 import ProductManagement from './ProductManagement'
 import ServiceManagement from './ServiceManagement'
 import SalesManagement from './SalesManagement'
-import Settings from './Settings'
+import ReportsScreen from './ReportsScreen';
+
 import InventoryManagement from './InventoryManagement'
 import ServiceScheduling from './ServiceScheduling'
 import ActivityLog from './ActivityLog'
@@ -224,6 +225,37 @@ const pageStyles = {
   }
 };
 
+// Debug Route Component (add this before main component)
+function DebugRoute({ user, stats }) {
+  return (
+    <div style={{
+      background: 'white',
+      padding: '30px',
+      borderRadius: '12px',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+      minHeight: 'calc(100vh - 60px)'
+    }}>
+      <h1 style={{ fontSize: '32px', color: '#10b981', marginBottom: '20px' }}>
+        ✅ Debug Route Working!
+      </h1>
+      <div style={{
+        background: '#f0f9ff',
+        padding: '20px',
+        borderRadius: '8px',
+        marginBottom: '20px',
+        border: '1px solid #bae6fd'
+      }}>
+        <h3 style={{ color: '#0077b6', marginBottom: '10px' }}>Debug Information:</h3>
+        <p><strong>Current Time:</strong> {new Date().toLocaleString()}</p>
+        <p><strong>User Email:</strong> {user?.email || 'Not logged in'}</p>
+        <p><strong>User ID:</strong> {user?.id || 'N/A'}</p>
+        <p><strong>Current Path:</strong> {window.location.pathname}</p>
+        <p><strong>Stats:</strong> {JSON.stringify(stats, null, 2)}</p>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard({ user }) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -343,78 +375,41 @@ export default function Dashboard({ user }) {
     }
   }
 
+  // 🚨 FIXED: Added missing closing brace
   const handleNavigation = (page) => {
-    setActivePage(page)
-    navigate(`/dashboard/${page}`)
-    console.log('🧭 Navigating to:', page);
-  }
+    navigate(`/dashboard/${page}`);
+  }; // ← THIS WAS MISSING
 
   const fetchAdminStats = async () => {
     try {
-      // Get today's date in UTC
       const today = new Date()
-      today.setHours(0, 0, 0, 0)
+      today.setHours(0,0,0,0)
       const startOfToday = today.toISOString()
-      
-      // Get first day of current month
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString()
 
-      // Total Sales Today
-      const { data: todayOrders, error: todayError } = await supabase
-        .from('orders')
-        .select('total_amount, created_at')
-        .eq('status', 'completed')
-        .gte('created_at', startOfToday)
-
-      let totalSalesToday = 0
-      if (!todayError && todayOrders) {
-        totalSalesToday = todayOrders.reduce((sum, order) => sum + (order.total_amount || order.total || 0), 0)
-      }
-
-      // Total Sales This Month
-      const { data: monthOrders, error: monthError } = await supabase
-        .from('orders')
-        .select('total_amount, created_at')
-        .eq('status', 'completed')
-        .gte('created_at', startOfMonth)
-
-      let totalSalesThisMonth = 0
-      if (!monthError && monthOrders) {
-        totalSalesThisMonth = monthOrders.reduce((sum, order) => sum + (order.total_amount || order.total || 0), 0)
-      }
-
-      // Pending Service Bookings
-      const { count: pendingBookings, error: bookingsError } = await supabase
-        .from('bookings')
-        .select('*', { count: 'exact' })
-        .eq('status', 'pending')
-
-      // Pending Orders for Approval
-      const { count: pendingOrders, error: ordersError } = await supabase
-        .from('orders')
-        .select('*', { count: 'exact' })
-        .eq('status', 'pending')
-
-      // Low Stock Products
-      const { count: lowStock, error: stockError } = await supabase
-        .from('products')
-        .select('*', { count: 'exact' })
-        .lte('stock_quantity', 5)
-
-      // Log any errors for debugging (optional)
-      if (bookingsError) console.error('Bookings error:', bookingsError)
-      if (ordersError) console.error('Orders error:', ordersError)
-      if (stockError) console.error('Stock error:', stockError)
+      const [
+        { data: todayOrders = [] },
+        { data: monthOrders = [] },
+        { count: pendingBookings = 0 },
+        { count: pendingOrders = 0 },
+        { count: lowStock = 0 }
+      ] = await Promise.all([
+        supabase.from('orders').select('total_amount, total').eq('status','completed').gte('created_at', startOfToday),
+        supabase.from('orders').select('total_amount, total').eq('status','completed').gte('created_at', startOfMonth),
+        supabase.from('bookings').select('*', { count: 'exact' }).eq('status','pending'),
+        supabase.from('orders').select('*', { count: 'exact' }).eq('status','pending'),
+        supabase.from('products').select('*', { count: 'exact' }).lte('stock_quantity',5)
+      ])
 
       setAdminStats({
-        totalSalesToday: totalSalesToday,
-        totalSalesThisMonth: totalSalesThisMonth,
+        totalSalesToday: todayOrders.reduce((sum,o)=>sum+(o.total_amount||o.total||0),0),
+        totalSalesThisMonth: monthOrders.reduce((sum,o)=>sum+(o.total_amount||o.total||0),0),
         pendingServiceBookings: pendingBookings || 0,
         pendingOrders: pendingOrders || 0,
         lowStockProducts: lowStock || 0
       })
-    } catch (error) {
-      console.error('Error fetching admin stats:', error)
+    } catch(err) {
+      console.error('Error fetching admin stats', err)
     }
   }
 
@@ -453,8 +448,8 @@ export default function Dashboard({ user }) {
       .subscribe()
 
     return () => {
-      supabase.removeChannel(bookingsChannel)
-      supabase.removeChannel(ordersChannel)
+      bookingsChannel.unsubscribe()
+      ordersChannel.unsubscribe()
     }
   }, [fetchPendingCount, fetchPendingOrdersCount])
 
@@ -517,120 +512,25 @@ export default function Dashboard({ user }) {
         ...styles.content,
         marginLeft: sidebarOpen ? '280px' : '80px',
       }}>
-        {/* Always show the dashboard content when on dashboard route */}
-        {activePage === 'dashboard' && <DashboardHome stats={adminStats} user={user} />}
-        
         <Routes>
-          {/* Main dashboard route */}
-          <Route index element={<DashboardHome stats={adminStats} user={user} />} />
-          {/* Sub-routes */}
-          <Route path="users" element={<UserSystemManagement />} />
-          <Route path="products" element={<ProductManagement />} />
-          <Route path="services" element={<ServiceManagement />} />
-          <Route path="settings" element={<Settings />} />
-          <Route path="sales" element={<SalesManagement />} />
-          <Route path="inventory" element={<InventoryManagement />} />
-          <Route path="service-scheduling" element={<ServiceScheduling />} />
-          <Route path="activity-log" element={<ActivityLog />} />
-          
-          {/* 🔍 DEBUG ROUTE */}
-          <Route path="test-debug" element={
-            <div style={{
-              background: 'white',
-              padding: '30px',
-              borderRadius: '12px',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-              minHeight: 'calc(100vh - 60px)'
-            }}>
-              <h1 style={{ fontSize: '32px', color: '#10b981', marginBottom: '20px' }}>
-                ✅ Debug Route Working!
-              </h1>
-              <div style={{
-                background: '#f0f9ff',
-                padding: '20px',
-                borderRadius: '8px',
-                marginBottom: '20px',
-                border: '1px solid #bae6fd'
-              }}>
-                <h3 style={{ color: '#0077b6', marginBottom: '10px' }}>Debug Information:</h3>
-                <p><strong>Current Time:</strong> {new Date().toLocaleString()}</p>
-                <p><strong>User Email:</strong> {user?.email || 'Not logged in'}</p>
-                <p><strong>User ID:</strong> {user?.id || 'N/A'}</p>
-                <p><strong>Current Path:</strong> {window.location.pathname}</p>
-              </div>
-              <div style={{
-                background: '#f0fdf4',
-                padding: '20px',
-                borderRadius: '8px',
-                border: '1px solid #a7f3d0'
-              }}>
-                <h3 style={{ color: '#10b981', marginBottom: '10px' }}>Next Steps:</h3>
-                <ul style={{ marginLeft: '20px', lineHeight: '1.8' }}>
-                  <li>Go to <a href="/dashboard/activity-log" style={{ color: '#0077b6', fontWeight: '500' }}>/dashboard/activity-log</a> to check Activity Log</li>
-                  <li>Check browser console (F12) for any errors</li>
-                  <li>Check if you can see the Activity Logs link in the sidebar</li>
-                  <li>Verify your database connection is working</li>
-                </ul>
-              </div>
-              <div style={{
-                marginTop: '20px',
-                padding: '15px',
-                background: '#fef3c7',
-                borderRadius: '8px',
-                border: '1px solid #fbbf24'
-              }}>
-                <h4 style={{ color: '#d97706', marginBottom: '10px' }}>Quick Actions:</h4>
-                <button 
-                  onClick={() => window.location.href = '/dashboard/activity-log'}
-                  style={{
-                    marginRight: '10px',
-                    padding: '8px 16px',
-                    background: '#0077b6',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Go to Activity Logs
-                </button>
-                <button 
-                  onClick={() => window.location.href = '/dashboard'}
-                  style={{
-                    marginRight: '10px',
-                    padding: '8px 16px',
-                    background: '#6b7280',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Back to Dashboard
-                </button>
-                <button 
-                  onClick={() => window.open('https://supabase.com/dashboard/project/_/editor', '_blank')}
-                  style={{
-                    padding: '8px 16px',
-                    background: '#3b82f6',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Open Supabase
-                </button>
-              </div>
-            </div>
-          } />
-        </Routes>
+  <Route index element={<DashboardHome stats={adminStats} user={user} />} />
+  <Route path="users" element={<UserSystemManagement />} />
+  <Route path="products" element={<ProductManagement />} />
+  <Route path="services" element={<ServiceManagement />} />
+  <Route path="sales" element={<SalesManagement />} />
+  <Route path="inventory" element={<InventoryManagement />} />
+  <Route path="service-scheduling" element={<ServiceScheduling />} />
+  <Route path="activity-log" element={<ActivityLog />} />
+  
+  <Route path="reports" element={<ReportsScreen />} /> {/* ADD THIS */}
+  <Route path="test-debug" element={<DebugRoute user={user} stats={adminStats} />} />
+</Routes>
       </div>
     </div>
   )
 }
 
-// Dashboard Home Component - UPDATED to include user prop
+// Dashboard Home Component
 function DashboardHome({ stats, user }) {
   const [showNotifications, setShowNotifications] = useState(false)
   const [chartData, setChartData] = useState([])

@@ -7,6 +7,8 @@ import ProtectedRoute from './admin/ProtectedRoute'
 import { supabase } from './supabase'
 
 function App() {
+  
+
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -47,7 +49,7 @@ function App() {
             animation: 'spin 1s linear infinite',
             margin: '0 auto 20px'
           }}></div>
-          <p>Loading Admin Panel...</p>
+          <p>Tropics Pools Information Management System </p>
         </div>
       </div>
     )

@@ -11,10 +11,8 @@ import {
   FaCheckCircle,
   FaClock,
   FaTimesCircle,
-  FaCalendarAlt,
   FaArrowUp,
   FaArrowDown,
-  FaPercentage,
   FaSearch,
   FaFilter,
   FaPrint,
@@ -23,14 +21,9 @@ import {
   FaTrash,
   FaEdit,
   FaPlus,
-  FaCog,
-  FaBell,
   FaChartLine,
-  FaCalendar,
   FaStore,
   FaMobileAlt,
-  FaCreditCard,
-  FaMoneyBillWave,
   FaTools,
   FaCar,
   FaCarAlt,
@@ -38,108 +31,1264 @@ import {
   FaShieldAlt,
   FaUserCircle,
   FaTag,
-  FaStar,
-  FaList,
-  FaThLarge,
-  FaSync
+  FaSync,
+  FaPhone,
+  FaEnvelope,
+  FaUser,
+  FaBox
 } from 'react-icons/fa';
 
-
 // ====================
-// MAIN COMPONENT
+// REUSABLE COMPONENTS
 // ====================
-const SalesManagement = () => {
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [realtimeOrders, setRealtimeOrders] = useState(0);
-  const [notifications, setNotifications] = useState([]);
 
-  useEffect(() => {
-    // Subscribe to real-time orders
-    const orderSubscription = supabase
-      .channel('orders')
-      .on('postgres_changes', 
-        { event: 'INSERT', schema: 'public', table: 'orders' },
-        (payload) => {
-          setRealtimeOrders(prev => prev + 1);
-          // Add notification for new order
-          setNotifications(prev => [
-            ...prev,
-            {
-              id: Date.now(),
-              type: 'new_order',
-              message: `New order #${payload.new.id} received`,
-              time: new Date().toLocaleTimeString(),
-              read: false
-            }
-          ]);
-        }
-      )
-      .subscribe();
+// Status badge component
+const StatusBadge = ({ status }) => {
+  const color = getStatusColor(status);
+  return (
+    <span style={{
+      padding: '6px 12px',
+      borderRadius: '20px',
+      fontSize: '12px',
+      fontWeight: '600',
+      textTransform: 'capitalize',
+      backgroundColor: color.background,
+      color: color.color,
+      border: `1px solid ${color.border}`,
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '4px'
+    }}>
+      {status === 'in_progress' && <FaClock size={10} />}
+      {status === 'completed' && <FaCheckCircle size={10} />}
+      {status === 'cancelled' && <FaTimesCircle size={10} />}
+      {status.replace('_', ' ')}
+    </span>
+  );
+};
 
-    return () => {
-      orderSubscription.unsubscribe();
+// Customer source badge component
+const CustomerSourceBadge = ({ order }) => {
+  if (!order.user_id) {
+    return (
+      <span style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '4px',
+        background: '#fff7ed',
+        color: '#ea580c',
+        padding: '2px 8px',
+        borderRadius: '12px',
+        fontSize: '12px',
+        fontWeight: '500',
+        marginLeft: '8px'
+      }}>
+        <FaStore size={10} />
+        Walk-in
+      </span>
+    );
+  }
+  
+  return (
+    <span style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '4px',
+      background: '#e0f2fe',
+      color: '#0369a1',
+      padding: '2px 8px',
+      borderRadius: '12px',
+      fontSize: '12px',
+      fontWeight: '500',
+      marginLeft: '8px'
+    }}>
+      <FaMobileAlt size={10} />
+      {order.profile_full_name ? 'Registered' : 'App User'}
+    </span>
+  );
+};
+
+// Stat card component
+const StatCard = ({ icon: Icon, title, value, color, bgColor }) => (
+  <div style={{
+    backgroundColor: 'white',
+    borderRadius: '12px',
+    padding: '20px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+    transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+  }}>
+    <div style={{
+      backgroundColor: bgColor,
+      padding: '12px',
+      borderRadius: '10px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    }}>
+      <Icon size={24} color={color} />
+    </div>
+    <div>
+      <div style={{
+        fontSize: '14px',
+        color: '#6b7280',
+        marginBottom: '4px'
+      }}>
+        {title}
+      </div>
+      <div style={{
+        fontSize: '24px',
+        fontWeight: '700',
+        color: '#111827'
+      }}>
+        {value}
+      </div>
+    </div>
+  </div>
+);
+
+// OrderRow with product details component
+const OrderRowWithProducts = ({ order, onView, onUpdateStatus, onDelete }) => {
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return {
+      date: date.toLocaleDateString(),
+      time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
-  }, []);
+  };
 
-  const tabs = [
-    { key: 'dashboard', icon: <FaChartBar />, label: 'Dashboard', count: realtimeOrders },
-    { key: 'orders', icon: <FaShoppingBag />, label: 'Orders' },
-    { key: 'services', icon: <FaTools />, label: 'Services' },
-    { key: 'bookings', icon: <FaCalendarCheck />, label: 'Bookings' },
-    { key: 'customers', icon: <FaUsers />, label: 'Customers' },
-    { key: 'reports', icon: <FaFileInvoice />, label: 'Analytics' },
-  ];
+  const { date, time } = formatDate(order.created_at);
+
+  // Function to render product details
+  const renderProducts = () => {
+    if (!order.products || order.products.length === 0) {
+      return <div style={{ fontSize: '12px', color: '#6b7280' }}>No products</div>;
+    }
+
+    return (
+      <div style={{ marginTop: '4px' }}>
+        {order.products.slice(0, 2).map((product, index) => (
+          <div key={index} style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            fontSize: '11px',
+            padding: '2px 0'
+          }}>
+            <span style={{ 
+              fontWeight: '500', 
+              color: '#374151',
+              maxWidth: '120px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}>
+              {product.name || `Product #${product.product_id}`}
+            </span>
+            <span style={{ 
+              fontWeight: '600', 
+              color: '#059669',
+              marginLeft: '8px'
+            }}>
+              ×{product.quantity || 1}
+            </span>
+          </div>
+        ))}
+        {order.products.length > 2 && (
+          <div style={{
+            fontSize: '10px',
+            color: '#6b7280',
+            fontStyle: 'italic',
+            marginTop: '2px'
+          }}>
+            +{order.products.length - 2} more items
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <div style={styles.headerContent}>
-          <div>
-            <h1 style={styles.title}>
-              <FaShoppingBag style={{ marginRight: '12px' }} />
-              Sales Management
-            </h1>
-            <p style={styles.subtitle}>Track sales, manage orders, and analyze performance</p>
+    <tr style={{
+      borderBottom: '1px solid #e5e7eb',
+      transition: 'background-color 0.2s ease'
+    }}>
+      <td style={{ padding: '16px', fontSize: '14px' }}>
+        <div style={{ fontWeight: '600', color: '#111827' }}>#{order.id}</div>
+        <div style={{
+          fontSize: '12px',
+          color: '#6b7280',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          marginTop: '4px'
+        }}>
+          {order.channel === 'mobile' ? (
+            <>
+              <FaMobileAlt size={10} /> Mobile
+            </>
+          ) : (
+            <>
+              <FaStore size={10} /> Walk-in
+            </>
+          )}
+        </div>
+      </td>
+      
+      <td style={{ padding: '16px' }}>
+        <div>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            marginBottom: '4px' 
+          }}>
+            <div style={{ 
+              fontWeight: '600', 
+              color: '#111827',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <FaUser size={12} color="#6b7280" />
+              {order.customer_name}
+              <CustomerSourceBadge order={order} />
+            </div>
           </div>
-          <div style={styles.headerActions}>
-            {notifications.length > 0 && (
-              <div style={styles.notificationBadge}>
-                {notifications.filter(n => !n.read).length}
+          <div style={{ 
+            fontSize: '13px', 
+            color: '#6b7280',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '2px'
+          }}>
+            <FaEnvelope size={12} />
+            {order.customer_email}
+          </div>
+          <div style={{ 
+            fontSize: '13px', 
+            color: '#6b7280',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <FaPhone size={12} />
+            {order.customer_phone}
+          </div>
+        </div>
+      </td>
+      
+      <td style={{ padding: '16px' }}>
+        <div>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '6px',
+            marginBottom: '4px'
+          }}>
+            <FaBox size={12} color="#6b7280" />
+            <span style={{ fontWeight: '500', fontSize: '13px' }}>
+              {order.total_items || 0} items
+            </span>
+          </div>
+          {renderProducts()}
+        </div>
+      </td>
+      
+      <td style={{ padding: '16px' }}>
+        <div style={{ fontWeight: '700', fontSize: '16px', color: '#111827' }}>
+          ₱{order.total.toLocaleString()}
+        </div>
+        <div style={{
+          fontSize: '12px',
+          color: '#6b7280',
+          textTransform: 'capitalize',
+          marginTop: '4px'
+        }}>
+          {order.payment_method}
+        </div>
+      </td>
+      
+      <td style={{ padding: '16px' }}>
+        <div style={{ fontWeight: '500', color: '#111827' }}>{date}</div>
+        <div style={{ fontSize: '13px', color: '#6b7280' }}>{time}</div>
+      </td>
+      
+      <td style={{ padding: '16px' }}>
+        <StatusBadge status={order.status} />
+      </td>
+      
+      <td style={{ padding: '16px' }}>
+        <div style={{ 
+          display: 'flex', 
+          gap: '8px',
+          justifyContent: 'flex-end' 
+        }}>
+          <button
+            onClick={() => onView(order)}
+            style={{
+              padding: '8px',
+              borderRadius: '6px',
+              border: '1px solid #d1d5db',
+              backgroundColor: 'white',
+              color: '#6b7280',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s ease'
+            }}
+            title="View Details"
+          >
+            <FaEye size={14} />
+          </button>
+          
+          {order.status === 'pending' && (
+            <button
+              onClick={() => onUpdateStatus(order.id, 'confirmed')}
+              style={{
+                padding: '8px',
+                borderRadius: '6px',
+                border: '1px solid #d1fae5',
+                backgroundColor: '#ecfdf5',
+                color: '#059669',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s ease'
+              }}
+              title="Confirm Order"
+            >
+              <FaCheckCircle size={14} />
+            </button>
+          )}
+          
+          {(order.status === 'pending' || order.status === 'confirmed') && (
+            <button
+              onClick={() => onUpdateStatus(order.id, 'cancelled')}
+              style={{
+                padding: '8px',
+                borderRadius: '6px',
+                border: '1px solid #fee2e2',
+                backgroundColor: '#fef2f2',
+                color: '#dc2626',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s ease'
+              }}
+              title="Cancel Order"
+            >
+              <FaTimesCircle size={14} />
+            </button>
+          )}
+          
+          <button
+            onClick={() => onDelete(order.id)}
+            style={{
+              padding: '8px',
+              borderRadius: '6px',
+              border: '1px solid #fee2e2',
+              backgroundColor: '#fef2f2',
+              color: '#dc2626',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s ease'
+            }}
+            title="Delete Order"
+          >
+            <FaTrash size={14} />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+};
+
+// Order Details Modal Component
+const OrderDetailsModal = ({ order, onClose }) => {
+  if (!order) return null;
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 50,
+      padding: '20px'
+    }}>
+      <div style={{
+        backgroundColor: 'white',
+        borderRadius: '12px',
+        width: '100%',
+        maxWidth: '700px',
+        maxHeight: '90vh',
+        overflowY: 'auto',
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
+      }}>
+        {/* Modal Header */}
+        <div style={{
+          padding: '24px',
+          borderBottom: '1px solid #e5e7eb',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <h2 style={{
+            fontSize: '20px',
+            fontWeight: '600',
+            color: '#111827',
+            margin: 0
+          }}>
+            Order #{order.id}
+          </h2>
+          <button
+            onClick={onClose}
+            style={{
+              padding: '8px',
+              backgroundColor: 'transparent',
+              border: 'none',
+              fontSize: '24px',
+              color: '#6b7280',
+              cursor: 'pointer',
+              lineHeight: 1
+            }}
+          >
+            ×
+          </button>
+        </div>
+        
+        {/* Modal Content */}
+        <div style={{ padding: '24px' }}>
+          {/* Customer Info */}
+          <div style={{ marginBottom: '24px' }}>
+            <h3 style={{
+              fontSize: '16px',
+              fontWeight: '600',
+              color: '#111827',
+              marginBottom: '16px'
+            }}>
+              Customer Information
+            </h3>
+            <div style={{
+              display: 'grid',
+              gap: '12px'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}>
+                <FaUser size={16} color="#6b7280" />
+                <div>
+                  <div style={{
+                    fontSize: '14px',
+                    color: '#6b7280'
+                  }}>
+                    Name
+                  </div>
+                  <div style={{
+                    fontSize: '16px',
+                    fontWeight: '500',
+                    color: '#111827'
+                  }}>
+                    {order.customer_name}
+                  </div>
+                </div>
               </div>
-            )}
+              
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}>
+                <FaEnvelope size={16} color="#6b7280" />
+                <div>
+                  <div style={{
+                    fontSize: '14px',
+                    color: '#6b7280'
+                  }}>
+                    Email
+                  </div>
+                  <div style={{
+                    fontSize: '16px',
+                    color: '#111827'
+                  }}>
+                    {order.customer_email}
+                  </div>
+                </div>
+              </div>
+              
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}>
+                <FaPhone size={16} color="#6b7280" />
+                <div>
+                  <div style={{
+                    fontSize: '14px',
+                    color: '#6b7280'
+                  }}>
+                    Phone
+                  </div>
+                  <div style={{
+                    fontSize: '16px',
+                    color: '#111827'
+                  }}>
+                    {order.customer_phone}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
+          
+          {/* Order Details */}
+          <div style={{ marginBottom: '24px' }}>
+            <h3 style={{
+              fontSize: '16px',
+              fontWeight: '600',
+              color: '#111827',
+              marginBottom: '16px'
+            }}>
+              Order Details
+            </h3>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '16px'
+            }}>
+              <div>
+                <div style={{
+                  fontSize: '14px',
+                  color: '#6b7280',
+                  marginBottom: '4px'
+                }}>
+                  Status
+                </div>
+                <StatusBadge status={order.status} />
+              </div>
+              
+              <div>
+                <div style={{
+                  fontSize: '14px',
+                  color: '#6b7280',
+                  marginBottom: '4px'
+                }}>
+                  Channel
+                </div>
+                <div style={{
+                  fontSize: '16px',
+                  fontWeight: '500',
+                  color: '#111827'
+                }}>
+                  {order.channel === 'mobile' ? 'Mobile App' : 'Walk-in'}
+                </div>
+              </div>
+              
+              <div>
+                <div style={{
+                  fontSize: '14px',
+                  color: '#6b7280',
+                  marginBottom: '4px'
+                }}>
+                  Payment Method
+                </div>
+                <div style={{
+                  fontSize: '16px',
+                  fontWeight: '500',
+                  color: '#111827',
+                  textTransform: 'capitalize'
+                }}>
+                  {order.payment_method}
+                </div>
+              </div>
+              
+              <div>
+                <div style={{
+                  fontSize: '14px',
+                  color: '#6b7280',
+                  marginBottom: '4px'
+                }}>
+                  Order Date
+                </div>
+                <div style={{
+                  fontSize: '16px',
+                  color: '#111827'
+                }}>
+                  {new Date(order.created_at).toLocaleDateString()}
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Products Section */}
+          {order.products && order.products.length > 0 && (
+            <div style={{ marginBottom: '24px' }}>
+              <h3 style={{
+                fontSize: '16px',
+                fontWeight: '600',
+                color: '#111827',
+                marginBottom: '16px'
+              }}>
+                Products ({order.total_items || 0} items)
+              </h3>
+              <div style={{
+                backgroundColor: '#f9fafb',
+                borderRadius: '8px',
+                padding: '16px',
+                maxHeight: '200px',
+                overflowY: 'auto'
+              }}>
+                {order.products.map((product, index) => (
+                  <div key={index} style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '8px 0',
+                    borderBottom: index < order.products.length - 1 ? '1px solid #e5e7eb' : 'none'
+                  }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: '500', color: '#111827' }}>
+                        {product.name}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                        ₱{product.price?.toLocaleString() || '0'} × {product.quantity || 1}
+                      </div>
+                    </div>
+                    <div style={{ fontWeight: '600', color: '#059669' }}>
+                      ₱{((product.price || 0) * (product.quantity || 1)).toLocaleString()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Total Amount */}
+          <div style={{
+            backgroundColor: '#f9fafb',
+            borderRadius: '8px',
+            padding: '20px'
+          }}>
+            <h3 style={{
+              fontSize: '16px',
+              fontWeight: '600',
+              color: '#111827',
+              marginBottom: '16px'
+            }}>
+              Amount Summary
+            </h3>
+            <div style={{ display: 'grid', gap: '8px' }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <span style={{ color: '#6b7280' }}>Subtotal:</span>
+                <span>₱{order.subtotal?.toLocaleString() || '0'}</span>
+              </div>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <span style={{ color: '#6b7280' }}>Tax:</span>
+                <span>₱{order.tax?.toLocaleString() || '0'}</span>
+              </div>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <span style={{ color: '#6b7280' }}>Discount:</span>
+                <span style={{ color: '#ef4444' }}>
+                  -₱{order.discount?.toLocaleString() || '0'}
+                </span>
+              </div>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                paddingTop: '12px',
+                borderTop: '1px solid #e5e7eb',
+                marginTop: '8px'
+              }}>
+                <span style={{
+                  fontWeight: '600',
+                  fontSize: '18px',
+                  color: '#111827'
+                }}>
+                  Total:
+                </span>
+                <span style={{
+                  fontWeight: '700',
+                  fontSize: '20px',
+                  color: '#3b82f6'
+                }}>
+                  ₱{order.total?.toLocaleString() || '0'}
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          {/* Notes */}
+          {order.notes && (
+            <div style={{ marginTop: '24px' }}>
+              <h3 style={{
+                fontSize: '16px',
+                fontWeight: '600',
+                color: '#111827',
+                marginBottom: '12px'
+              }}>
+                Notes
+              </h3>
+              <div style={{
+                backgroundColor: '#f9fafb',
+                borderRadius: '8px',
+                padding: '16px',
+                fontSize: '14px',
+                color: '#4b5563'
+              }}>
+                {order.notes}
+              </div>
+            </div>
+          )}
+        </div>
+        
+        {/* Modal Footer */}
+        <div style={{
+          padding: '24px',
+          borderTop: '1px solid #e5e7eb',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: '12px'
+        }}>
+          <button
+            onClick={onClose}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: 'pointer'
+            }}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ====================
+// HELPER FUNCTIONS
+// ====================
+const getStatusColor = (status) => {
+  const colors = {
+    pending: { background: '#fffbeb', color: '#f59e0b', border: '#fcd34d' },
+    confirmed: { background: '#e0f2fe', color: '#0284c7', border: '#7dd3fc' },
+    in_progress: { background: '#f0f9ff', color: '#0ea5e9', border: '#bae6fd' },
+    completed: { background: '#f0fdf4', color: '#16a34a', border: '#86efac' },
+    cancelled: { background: '#fef2f2', color: '#dc2626', border: '#fca5a5' }
+  };
+  return colors[status] || { background: '#f3f4f6', color: '#6b7280', border: '#d1d5db' };
+};
+
+const getCategoryColor = (category) => {
+  switch (category) {
+    case 'maintenance':
+      return 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)';
+    case 'repair':
+      return 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
+    case 'tires':
+      return 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+    case 'car_wash':
+      return 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)';
+    case 'inspection':
+      return 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
+    default:
+      return 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)';
+  }
+};
+
+// ====================
+// ORDERS SCREEN COMPONENT
+// ====================
+const OrdersScreen = ({ orders, fetchOrders }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [showDetails, setShowDetails] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const getFilteredOrders = () => {
+    let filtered = [...orders];
+
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(order =>
+        order.customer_name?.toLowerCase().includes(term) ||
+        order.customer_email?.toLowerCase().includes(term) ||
+        order.customer_phone?.includes(searchTerm) ||
+        order.id?.toString().includes(searchTerm) ||
+        order.products?.some(product => 
+          product.name?.toLowerCase().includes(term)
+        )
+      );
+    }
+
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(order => order.status === statusFilter);
+    }
+
+    return filtered;
+  };
+
+  const updateOrderStatus = async (orderId, newStatus) => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: newStatus })
+        .eq('id', orderId);
+
+      if (error) throw error;
+      
+      // Refresh orders after update
+      if (fetchOrders) {
+        fetchOrders();
+      }
+    } catch (error) {
+      console.error('Error updating order status:', error);
+      alert('Error updating order status: ' + error.message);
+    }
+  };
+
+  const deleteOrder = async (orderId) => {
+    if (!window.confirm('Are you sure you want to delete this order?')) return;
+    
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', orderId);
+
+      if (error) throw error;
+      
+      // Refresh orders after delete
+      if (fetchOrders) {
+        fetchOrders();
+      }
+    } catch (error) {
+      console.error('Error deleting order:', error);
+      alert('Error deleting order: ' + error.message);
+    }
+  };
+
+  // Calculate statistics
+  const stats = {
+    total: orders.length,
+    pending: orders.filter(o => o.status === 'pending').length,
+    confirmed: orders.filter(o => o.status === 'confirmed').length,
+    in_progress: orders.filter(o => o.status === 'in_progress').length,
+    completed: orders.filter(o => o.status === 'completed').length,
+    cancelled: orders.filter(o => o.status === 'cancelled').length,
+    walkIn: orders.filter(o => !o.user_id).length,
+    mobile: orders.filter(o => o.user_id).length,
+    totalItems: orders.reduce((sum, order) => sum + (order.total_items || 0), 0)
+  };
+
+  const filteredOrders = getFilteredOrders();
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      backgroundColor: '#f9fafb',
+      padding: '24px'
+    }}>
+      {/* Header */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '24px'
+      }}>
+        <div>
+          <h1 style={{
+            fontSize: '24px',
+            fontWeight: '700',
+            color: '#111827',
+            margin: '0 0 4px 0'
+          }}>
+            Order Management
+          </h1>
+          <p style={{
+            fontSize: '14px',
+            color: '#6b7280',
+            margin: 0
+          }}>
+            Manage and track customer orders
+          </p>
+        </div>
+        
+        <button
+          onClick={fetchOrders}
+          disabled={refreshing}
+          style={{
+            padding: '10px 16px',
+            backgroundColor: '#3b82f6',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            transition: 'background-color 0.2s ease',
+            opacity: refreshing ? 0.7 : 1
+          }}
+        >
+          <FaSync style={refreshing ? { animation: 'spin 1s linear infinite' } : {}} />
+          {refreshing ? 'Refreshing...' : 'Refresh'}
+        </button>
+      </div>
+
+      {/* Stats Grid */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+        gap: '16px',
+        marginBottom: '24px'
+      }}>
+        <StatCard
+          icon={FaShoppingBag}
+          title="Total Orders"
+          value={stats.total}
+          color="#3b82f6"
+          bgColor="#eff6ff"
+        />
+        <StatCard
+          icon={FaShoppingCart}
+          title="Total Items"
+          value={stats.totalItems}
+          color="#10b981"
+          bgColor="#f0fdf4"
+        />
+        <StatCard
+          icon={FaClock}
+          title="Pending"
+          value={stats.pending}
+          color="#f59e0b"
+          bgColor="#fffbeb"
+        />
+        <StatCard
+          icon={FaCheckCircle}
+          title="Completed"
+          value={stats.completed}
+          color="#059669"
+          bgColor="#d1fae5"
+        />
+      </div>
+
+      {/* Filters */}
+      <div style={{
+        backgroundColor: 'white',
+        borderRadius: '12px',
+        padding: '20px',
+        marginBottom: '24px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+      }}>
+        <div style={{
+          display: 'flex',
+          gap: '16px',
+          alignItems: 'flex-end',
+          flexWrap: 'wrap'
+        }}>
+          <div style={{ flex: 1, minWidth: '300px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: '600',
+              color: '#374151',
+              marginBottom: '8px'
+            }}>
+              Search Orders
+            </label>
+            <div style={{
+              position: 'relative',
+              display: 'flex',
+              alignItems: 'center'
+            }}>
+              <FaSearch style={{
+                position: 'absolute',
+                left: '12px',
+                color: '#9ca3af'
+              }} />
+              <input
+                type="text"
+                placeholder="Search by customer, product, or order ID..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px 10px 36px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  outline: 'none',
+                  transition: 'border-color 0.2s ease'
+                }}
+              />
+            </div>
+          </div>
+          
+          <div style={{ minWidth: '200px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: '600',
+              color: '#374151',
+              marginBottom: '8px'
+            }}>
+              Status Filter
+            </label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '14px',
+                backgroundColor: 'white',
+                outline: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="all">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="in_progress">In Progress</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          
+          <button
+            onClick={() => {
+              setSearchTerm('');
+              setStatusFilter('all');
+            }}
+            style={{
+              padding: '10px 16px',
+              backgroundColor: '#f3f4f6',
+              color: '#374151',
+              border: '1px solid #d1d5db',
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <FaFilter />
+            Clear Filters
+          </button>
         </div>
       </div>
 
-      <div style={styles.tabContainer}>
-        {tabs.map(tab => (
-          <button
-            key={tab.key}
-            style={{
-              ...styles.tabButton,
-              background: activeTab === tab.key ? 'linear-gradient(135deg, #0077b6 0%, #00b4d8 100%)' : 'transparent',
-              color: activeTab === tab.key ? '#ffffff' : '#023e8a',
-              borderBottom: activeTab === tab.key ? '3px solid #0077b6' : 'none',
-            }}
-            onClick={() => setActiveTab(tab.key)}
-          >
-            <span style={styles.tabIcon}>{tab.icon}</span>
-            <span style={styles.tabLabel}>{tab.label}</span>
-            {tab.count > 0 && (
-              <span style={styles.tabBadge}>{tab.count}</span>
-            )}
-          </button>
-        ))}
+      {/* Orders Table */}
+      <div style={{
+        backgroundColor: 'white',
+        borderRadius: '12px',
+        overflow: 'hidden',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+      }}>
+        <div style={{
+          padding: '20px',
+          borderBottom: '1px solid #e5e7eb',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <h2 style={{
+            fontSize: '18px',
+            fontWeight: '600',
+            color: '#111827',
+            margin: 0
+          }}>
+            Recent Orders
+          </h2>
+          <div style={{
+            fontSize: '14px',
+            color: '#6b7280'
+          }}>
+            Showing {filteredOrders.length} of {orders.length} orders
+          </div>
+        </div>
+        
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            minWidth: '1200px'
+          }}>
+            <thead>
+              <tr style={{
+                backgroundColor: '#f9fafb',
+                borderBottom: '1px solid #e5e7eb'
+              }}>
+                <th style={{
+                  padding: '16px',
+                  textAlign: 'left',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: '#6b7280',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}>
+                  Order ID
+                </th>
+                <th style={{
+                  padding: '16px',
+                  textAlign: 'left',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: '#6b7280',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}>
+                  Customer
+                </th>
+                <th style={{
+                  padding: '16px',
+                  textAlign: 'left',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: '#6b7280',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}>
+                  Products
+                </th>
+                <th style={{
+                  padding: '16px',
+                  textAlign: 'left',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: '#6b7280',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}>
+                  Amount
+                </th>
+                <th style={{
+                  padding: '16px',
+                  textAlign: 'left',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: '#6b7280',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}>
+                  Date & Time
+                </th>
+                <th style={{
+                  padding: '16px',
+                  textAlign: 'left',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: '#6b7280',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}>
+                  Status
+                </th>
+                <th style={{
+                  padding: '16px',
+                  textAlign: 'right',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: '#6b7280',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}>
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredOrders.length === 0 ? (
+                <tr>
+                  <td colSpan="7" style={{ 
+                    padding: '48px 16px', 
+                    textAlign: 'center' 
+                  }}>
+                    <FaShoppingBag size={48} color="#d1d5db" />
+                    <h3 style={{ 
+                      margin: '16px 0 8px 0', 
+                      color: '#111827', 
+                      fontSize: '18px' 
+                    }}>
+                      No Orders Found
+                    </h3>
+                    <p style={{ 
+                      color: '#6b7280', 
+                      fontSize: '14px',
+                      margin: 0 
+                    }}>
+                      No orders match your search criteria
+                    </p>
+                  </td>
+                </tr>
+              ) : (
+                filteredOrders.map(order => (
+                  <OrderRowWithProducts
+                    key={order.id}
+                    order={order}
+                    onView={(order) => {
+                      setSelectedOrder(order);
+                      setShowDetails(true);
+                    }}
+                    onUpdateStatus={updateOrderStatus}
+                    onDelete={deleteOrder}
+                  />
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      <div style={styles.content}>
-        {activeTab === 'dashboard' && <DashboardScreen />}
-        {activeTab === 'orders' && <OrdersScreen />}
-        {activeTab === 'services' && <ServicesScreen />}
-        {activeTab === 'bookings' && <BookingManagement />}
-        {activeTab === 'customers' && <CustomersScreen />}
-        {activeTab === 'reports' && <AnalyticsScreen />}
-      </div>
+      {/* Order Details Modal */}
+      {showDetails && selectedOrder && (
+        <OrderDetailsModal
+          order={selectedOrder}
+          onClose={() => setShowDetails(false)}
+        />
+      )}
     </div>
   );
 };
@@ -147,7 +1296,7 @@ const SalesManagement = () => {
 // ====================
 // DASHBOARD SCREEN COMPONENT
 // ====================
-const DashboardScreen = () => {
+const DashboardScreen = ({ orders = [] }) => {
   const [dashboardData, setDashboardData] = useState({
     totalRevenue: 0,
     totalOrders: 0,
@@ -160,11 +1309,61 @@ const DashboardScreen = () => {
     topServices: [],
     recentOrders: [],
     todayOrders: 0,
-    todayRevenue: 0
+    todayRevenue: 0,
+    totalWalkInCustomers: 0,
+    totalMobileCustomers: 0
   });
+  
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('month');
+  const [customers, setCustomers] = useState([]);
   const [services, setServices] = useState([]);
+
+  // Calculate monthly revenue without circular dependency
+  const calculateMonthlyRevenue = (ordersData) => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const currentMonth = new Date().getMonth();
+    
+    // Initialize monthly data
+    const monthlyData = months.slice(0, currentMonth + 1).map((month, index) => ({
+      month,
+      revenue: 0,
+      growth: 0
+    }));
+    
+    // Calculate revenue for each month
+    ordersData.forEach(order => {
+      if (!order.created_at) return;
+      
+      const orderDate = new Date(order.created_at);
+      const monthIndex = orderDate.getMonth();
+      const orderYear = orderDate.getFullYear();
+      const currentYear = new Date().getFullYear();
+      
+      // Only count orders from current year
+      if (orderYear === currentYear && monthIndex <= currentMonth) {
+        monthlyData[monthIndex].revenue += (order.total_amount || order.total || 0);
+      }
+    });
+    
+    // Calculate growth rates
+    monthlyData.forEach((monthData, index) => {
+      if (index > 0) {
+        const prevMonthRevenue = monthlyData[index - 1].revenue;
+        if (prevMonthRevenue > 0) {
+          monthData.growth = ((monthData.revenue / prevMonthRevenue) - 1) * 100;
+        }
+      }
+    });
+    
+    return monthlyData;
+  };
+
+  // Calculate growth percentage compared to previous period
+  const calculateGrowth = (currentData, previousData) => {
+    if (!previousData || previousData === 0) return 0;
+    return ((currentData - previousData) / previousData) * 100;
+  };
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -172,87 +1371,131 @@ const DashboardScreen = () => {
       
       // Calculate date range
       let dateFilter = new Date();
+      let previousDateFilter = new Date();
+      
       switch(timeRange) {
         case 'today':
           dateFilter.setHours(0, 0, 0, 0);
+          previousDateFilter.setDate(previousDateFilter.getDate() - 1);
+          previousDateFilter.setHours(0, 0, 0, 0);
           break;
         case 'week':
           dateFilter.setDate(dateFilter.getDate() - 7);
+          previousDateFilter.setDate(previousDateFilter.getDate() - 14);
           break;
         case 'month':
           dateFilter.setMonth(dateFilter.getMonth() - 1);
+          previousDateFilter.setMonth(previousDateFilter.getMonth() - 2);
           break;
         case 'quarter':
           dateFilter.setMonth(dateFilter.getMonth() - 3);
+          previousDateFilter.setMonth(previousDateFilter.getMonth() - 6);
           break;
         case 'year':
           dateFilter.setFullYear(dateFilter.getFullYear() - 1);
+          previousDateFilter.setFullYear(previousDateFilter.getFullYear() - 2);
           break;
       }
-
-      // Fetch orders with service data
-      const { data: ordersData, error: ordersError } = await supabase
-        .from('orders')
-        .select('*')
-        .gte('created_at', dateFilter.toISOString())
-        .order('created_at', { ascending: false });
-
-      if (ordersError) throw ordersError;
 
       // Fetch customers
       const { data: customersData, error: customersError } = await supabase
         .from('users')
-        .select('id, created_at')
-        .gte('created_at', dateFilter.toISOString());
+        .select('id, created_at, full_name, email')
+        .order('created_at', { ascending: false });
 
       if (customersError) throw customersError;
 
-      // Fetch services for top services calculation
+      // Fetch services
       const { data: servicesData, error: servicesError } = await supabase
         .from('services')
         .select('*')
-        .order('price', { ascending: false });
+        .order('name');
 
       if (servicesError) throw servicesError;
       setServices(servicesData || []);
 
-      // Calculate metrics
-      const totalRevenue = ordersData?.reduce((sum, order) => 
-        sum + (order.total_amount || order.total || 0), 0) || 0;
+      setCustomers(customersData || []);
 
-      const totalOrders = ordersData?.length || 0;
-      const totalCustomers = customersData?.length || 0;
+      // Filter orders by time range
+      const filteredOrders = orders.filter(order => 
+        new Date(order.created_at) >= dateFilter
+      );
+
+      // Filter customers by time range
+      const filteredCustomers = customersData?.filter(customer => 
+        new Date(customer.created_at) >= dateFilter
+      ) || [];
+
+      // Filter orders for previous period for comparison
+      const previousPeriodOrders = orders.filter(order => 
+        new Date(order.created_at) >= previousDateFilter && 
+        new Date(order.created_at) < dateFilter
+      );
+
+      // Filter customers for previous period
+      const previousPeriodCustomers = customersData?.filter(customer => 
+        new Date(customer.created_at) >= previousDateFilter && 
+        new Date(customer.created_at) < dateFilter
+      ) || [];
+
+      // Calculate metrics for current period
+      const totalRevenue = filteredOrders.reduce((sum, order) => 
+        sum + (order.total || 0), 0);
+
+      const totalOrders = filteredOrders.length;
+      const totalCustomers = filteredCustomers.length;
       const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-      const pendingOrders = ordersData?.filter(order => order.status === 'pending').length || 0;
-      const completedOrders = ordersData?.filter(order => order.status === 'completed').length || 0;
-      const conversionRate = totalCustomers > 0 ? (totalOrders / totalCustomers) * 100 : 0;
+      const pendingOrders = filteredOrders.filter(order => order.status === 'pending').length;
+      const completedOrders = filteredOrders.filter(order => order.status === 'completed').length;
+      const walkInCustomers = filteredOrders.filter(order => !order.user_id).length;
+      const mobileCustomers = filteredOrders.filter(order => order.user_id).length;
+
+      // Calculate metrics for previous period
+      const previousTotalRevenue = previousPeriodOrders.reduce((sum, order) => 
+        sum + (order.total || 0), 0);
+      const previousTotalOrders = previousPeriodOrders.length;
+      const previousTotalCustomers = previousPeriodCustomers.length;
+      const previousAverageOrderValue = previousTotalOrders > 0 ? previousTotalRevenue / previousTotalOrders : 0;
+      const previousPendingOrders = previousPeriodOrders.filter(order => order.status === 'pending').length;
+      const previousCompletedOrders = previousPeriodOrders.filter(order => order.status === 'completed').length;
+
+      // Calculate growth percentages
+      const revenueGrowth = calculateGrowth(totalRevenue, previousTotalRevenue);
+      const ordersGrowth = calculateGrowth(totalOrders, previousTotalOrders);
+      const customersGrowth = calculateGrowth(totalCustomers, previousTotalCustomers);
+      const avgOrderValueGrowth = calculateGrowth(averageOrderValue, previousAverageOrderValue);
+      const pendingOrdersGrowth = calculateGrowth(pendingOrders, previousPendingOrders);
+      const completedOrdersGrowth = calculateGrowth(completedOrders, previousCompletedOrders);
 
       // Calculate today's metrics
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
-      const todayOrdersData = ordersData?.filter(order => 
+      const todayOrdersData = filteredOrders.filter(order => 
         new Date(order.created_at) >= todayStart
-      ) || [];
+      );
       const todayOrders = todayOrdersData.length;
-      const todayRevenue = todayOrdersData.reduce((sum, order) => sum + (order.total_amount || order.total || 0), 0);
+      const todayRevenue = todayOrdersData.reduce((sum, order) => sum + (order.total || 0), 0);
+
+      // Calculate conversion rate
+      const conversionRate = totalCustomers > 0 ? (totalOrders / totalCustomers) * 100 : 0;
 
       // Calculate monthly revenue
-      const monthlyRevenue = calculateMonthlyRevenue(ordersData || []);
+      const monthlyRevenue = calculateMonthlyRevenue(orders);
       
-      // Calculate top services from order items
+      // Calculate top services from orders
       const serviceRevenue = {};
-      ordersData?.forEach(order => {
-        if (order.order_items && Array.isArray(order.order_items)) {
-          order.order_items.forEach(item => {
-            if (item.service_id) {
-              const serviceName = servicesData?.find(s => s.id === item.service_id)?.name || `Service #${item.service_id}`;
-              if (!serviceRevenue[serviceName]) {
-                serviceRevenue[serviceName] = { revenue: 0, orders: 0 };
-              }
-              serviceRevenue[serviceName].revenue += (item.quantity || 1) * (item.price || 0);
-              serviceRevenue[serviceName].orders += 1;
+      filteredOrders.forEach(order => {
+        // If order has service_id directly
+        if (order.service_id) {
+          const service = servicesData?.find(s => s.id === order.service_id);
+          if (service) {
+            const serviceName = service.name || `Service #${order.service_id}`;
+            if (!serviceRevenue[serviceName]) {
+              serviceRevenue[serviceName] = { revenue: 0, orders: 0 };
             }
-          });
+            serviceRevenue[serviceName].revenue += (order.total || 0);
+            serviceRevenue[serviceName].orders += 1;
+          }
         }
       });
 
@@ -265,14 +1508,14 @@ const DashboardScreen = () => {
         .sort((a, b) => b.revenue - a.revenue)
         .slice(0, 4);
 
-      // Get recent orders
-      const recentOrders = ordersData?.slice(0, 5).map(order => ({
+      // Get recent orders (5 most recent from all orders)
+      const recentOrders = orders.slice(0, 5).map(order => ({
         ...order,
         customer_name: order.customer_name || 'Walk-in Customer',
         customer_phone: order.customer_phone || 'N/A',
         channel: order.channel || 'walk-in',
-        total: order.total_amount || order.total || 0
-      })) || [];
+        total: order.total || 0
+      }));
 
       setDashboardData({
         totalRevenue,
@@ -286,7 +1529,17 @@ const DashboardScreen = () => {
         topServices,
         recentOrders,
         todayOrders,
-        todayRevenue
+        todayRevenue,
+        totalWalkInCustomers: walkInCustomers,
+        totalMobileCustomers: mobileCustomers,
+        growthPercentages: {
+          revenue: revenueGrowth,
+          orders: ordersGrowth,
+          customers: customersGrowth,
+          averageOrderValue: avgOrderValueGrowth,
+          pendingOrders: pendingOrdersGrowth,
+          completedOrders: completedOrdersGrowth
+        }
       });
 
     } catch (error) {
@@ -294,41 +1547,29 @@ const DashboardScreen = () => {
     } finally {
       setLoading(false);
     }
-  }, [timeRange]);
+  }, [timeRange, orders]);
 
   useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
-  const calculateMonthlyRevenue = (orders) => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const currentMonth = new Date().getMonth();
-    
-    return months.slice(0, currentMonth + 1).map((month, index) => {
-      const monthOrders = orders.filter(order => {
-        if (!order.created_at) return false;
-        const orderDate = new Date(order.created_at);
-        return orderDate.getMonth() === index && orderDate.getFullYear() === new Date().getFullYear();
-      });
-      
-      const revenue = monthOrders.reduce((sum, order) => sum + (order.total_amount || order.total || 0), 0);
-      
-      return {
-        month,
-        revenue,
-        growth: index > 0 ? ((revenue / (dashboardData.monthlyRevenue[index-1]?.revenue || 1) - 1) * 100) || 0 : 0
-      };
-    });
-  };
-
   const refreshDashboard = () => {
     fetchDashboardData();
+  };
+
+  // Format growth percentage for display
+  const formatGrowth = (growth) => {
+    if (growth === 0) return { value: '0%', isPositive: true, color: '#6b7280' };
+    const isPositive = growth > 0;
+    const value = `${isPositive ? '+' : ''}${growth.toFixed(1)}%`;
+    const color = isPositive ? '#10b981' : '#ef4444';
+    return { value, isPositive, color };
   };
 
   if (loading) {
     return (
       <div style={styles.loadingContainer}>
-        <div style={styles.spinner}></div>
+        <div className="spinner" />
         <p style={styles.loadingText}>Loading dashboard data...</p>
       </div>
     );
@@ -381,6 +1622,24 @@ const DashboardScreen = () => {
             <div style={styles.todayStatValue}>₱{dashboardData.todayRevenue.toLocaleString()}</div>
           </div>
         </div>
+        <div style={styles.todayStatCard}>
+          <div style={styles.todayStatIcon}>
+            <FaStore size={24} color="#f59e0b" />
+          </div>
+          <div>
+            <div style={styles.todayStatLabel}>Walk-in Customers</div>
+            <div style={styles.todayStatValue}>{dashboardData.totalWalkInCustomers}</div>
+          </div>
+        </div>
+        <div style={styles.todayStatCard}>
+          <div style={styles.todayStatIcon}>
+            <FaMobileAlt size={24} color="#8b5cf6" />
+          </div>
+          <div>
+            <div style={styles.todayStatLabel}>Mobile Customers</div>
+            <div style={styles.todayStatValue}>{dashboardData.totalMobileCustomers}</div>
+          </div>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -389,7 +1648,7 @@ const DashboardScreen = () => {
           {
             title: 'Total Revenue',
             value: `₱${dashboardData.totalRevenue.toLocaleString()}`,
-            change: '+12.5%',
+            growth: dashboardData.growthPercentages?.revenue || 0,
             icon: <FaDollarSign />,
             color: '#065f46',
             bgColor: '#d1fae5'
@@ -397,7 +1656,7 @@ const DashboardScreen = () => {
           {
             title: 'Total Orders',
             value: dashboardData.totalOrders,
-            change: '+8.3%',
+            growth: dashboardData.growthPercentages?.orders || 0,
             icon: <FaShoppingCart />,
             color: '#1d4ed8',
             bgColor: '#dbeafe'
@@ -405,7 +1664,7 @@ const DashboardScreen = () => {
           {
             title: 'Total Customers',
             value: dashboardData.totalCustomers,
-            change: '+5.7%',
+            growth: dashboardData.growthPercentages?.customers || 0,
             icon: <FaUsers />,
             color: '#92400e',
             bgColor: '#fef3c7'
@@ -413,7 +1672,7 @@ const DashboardScreen = () => {
           {
             title: 'Avg Order Value',
             value: `₱${dashboardData.averageOrderValue.toFixed(2)}`,
-            change: '+4.2%',
+            growth: dashboardData.growthPercentages?.averageOrderValue || 0,
             icon: <FaChartLine />,
             color: '#be185d',
             bgColor: '#fce7f3'
@@ -421,7 +1680,7 @@ const DashboardScreen = () => {
           {
             title: 'Pending Orders',
             value: dashboardData.pendingOrders,
-            change: '-2.1%',
+            growth: dashboardData.growthPercentages?.pendingOrders || 0,
             icon: <FaClock />,
             color: '#991b1b',
             bgColor: '#fee2e2'
@@ -429,35 +1688,41 @@ const DashboardScreen = () => {
           {
             title: 'Completed Orders',
             value: dashboardData.completedOrders,
-            change: '+15.8%',
+            growth: dashboardData.growthPercentages?.completedOrders || 0,
             icon: <FaCheckCircle />,
             color: '#166534',
             bgColor: '#dcfce7'
           }
-        ].map((kpi, index) => (
-          <div key={index} style={styles.kpiCard}>
-            <div style={{ ...styles.kpiIcon, background: kpi.bgColor }}>
-              {React.cloneElement(kpi.icon, { size: 24, color: kpi.color })}
-            </div>
-            <div style={styles.kpiContent}>
-              <div style={styles.kpiLabel}>{kpi.title}</div>
-              <div style={styles.kpiValue}>{kpi.value}</div>
-              <div style={styles.kpiChange}>
-                {kpi.change.startsWith('+') ? (
-                  <FaArrowUp size={12} color="#10b981" />
-                ) : (
-                  <FaArrowDown size={12} color="#ef4444" />
-                )}
-                <span style={{ 
-                  color: kpi.change.startsWith('+') ? '#10b981' : '#ef4444',
-                  marginLeft: '4px'
-                }}>
-                  {kpi.change} from last {timeRange}
-                </span>
+        ].map((kpi, index) => {
+          const growth = formatGrowth(kpi.growth);
+          return (
+            <div key={index} style={styles.kpiCard}>
+              <div style={{ ...styles.kpiIcon, background: kpi.bgColor }}>
+                {React.cloneElement(kpi.icon, { size: 24, color: kpi.color })}
+              </div>
+              <div style={styles.kpiContent}>
+                <div style={styles.kpiLabel}>{kpi.title}</div>
+                <div style={styles.kpiValue}>{kpi.value}</div>
+                <div style={styles.kpiChange}>
+                  {growth.isPositive ? (
+                    <FaArrowUp size={12} color="#10b981" />
+                  ) : growth.value === '0%' ? (
+                    <span style={{ width: '12px' }} />
+                  ) : (
+                    <FaArrowDown size={12} color="#ef4444" />
+                  )}
+                  <span style={{ 
+                    color: growth.color,
+                    marginLeft: '4px',
+                    fontSize: '13px'
+                  }}>
+                    {growth.value} from last {timeRange}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Charts and Data */}
@@ -477,10 +1742,12 @@ const DashboardScreen = () => {
                     <div 
                       style={{
                         ...styles.revenueBar,
-                        height: `${Math.min(100, (item.revenue / 10000) * 100)}%`,
+                        height: `${Math.min(100, (item.revenue / Math.max(...dashboardData.monthlyRevenue.map(m => m.revenue))) * 100)}%`,
                         background: item.growth > 0 
                           ? 'linear-gradient(to top, #0077b6, #00b4d8)'
-                          : 'linear-gradient(to top, #ef4444, #f87171)'
+                          : item.growth < 0
+                          ? 'linear-gradient(to top, #ef4444, #f87171)'
+                          : 'linear-gradient(to top, #6b7280, #9ca3af)'
                       }}
                     >
                       <div style={styles.revenueBarValue}>₱{item.revenue.toLocaleString()}</div>
@@ -489,15 +1756,15 @@ const DashboardScreen = () => {
                   <div style={styles.revenueGrowth}>
                     {item.growth > 0 ? (
                       <FaArrowUp size={10} color="#10b981" />
-                    ) : (
+                    ) : item.growth < 0 ? (
                       <FaArrowDown size={10} color="#ef4444" />
-                    )}
+                    ) : null}
                     <span style={{ 
-                      color: item.growth > 0 ? '#10b981' : '#ef4444',
+                      color: item.growth > 0 ? '#10b981' : item.growth < 0 ? '#ef4444' : '#6b7280',
                       fontSize: '11px',
                       marginLeft: '2px'
                     }}>
-                      {Math.abs(item.growth).toFixed(1)}%
+                      {item.growth !== 0 ? `${Math.abs(item.growth).toFixed(1)}%` : '-'}
                     </span>
                   </div>
                 </div>
@@ -510,27 +1777,40 @@ const DashboardScreen = () => {
         <div style={styles.chartCard}>
           <div style={styles.chartHeader}>
             <h3 style={styles.chartTitle}>Top Performing Services</h3>
-            <button style={styles.viewAllButton}>View Details</button>
+            <button 
+              style={styles.viewAllButton}
+              onClick={() => console.log('View all services')}
+            >
+              View Details
+            </button>
           </div>
           <div style={styles.chartContent}>
             <div style={styles.topServicesList}>
-              {dashboardData.topServices.map((service, index) => (
-                <div key={index} style={styles.topServiceItem}>
-                  <div style={styles.serviceRank}>{index + 1}</div>
-                  <div style={styles.serviceInfo}>
-                    <div style={styles.serviceName}>{service.name}</div>
-                    <div style={styles.serviceStats}>
-                      <span style={styles.serviceOrders}>{service.orders} orders</span>
+              {dashboardData.topServices.length > 0 ? (
+                dashboardData.topServices.map((service, index) => (
+                  <div key={index} style={styles.topServiceItem}>
+                    <div style={styles.serviceRank}>{index + 1}</div>
+                    <div style={styles.serviceInfo}>
+                      <div style={styles.serviceName}>{service.name}</div>
+                      <div style={styles.serviceStats}>
+                        <span style={styles.serviceOrders}>{service.orders} orders</span>
+                      </div>
+                    </div>
+                    <div style={styles.serviceRevenue}>
+                      <div style={styles.revenueAmount}>₱{service.revenue.toLocaleString()}</div>
+                      <div style={styles.revenuePercentage}>
+                        {dashboardData.totalRevenue > 0 
+                          ? `${((service.revenue / dashboardData.totalRevenue) * 100).toFixed(1)}%`
+                          : '0%'}
+                      </div>
                     </div>
                   </div>
-                  <div style={styles.serviceRevenue}>
-                    <div style={styles.revenueAmount}>₱{service.revenue.toLocaleString()}</div>
-                    <div style={styles.revenuePercentage}>
-                      {((service.revenue / dashboardData.totalRevenue) * 100).toFixed(1)}%
-                    </div>
-                  </div>
+                ))
+              ) : (
+                <div style={styles.noDataMessage}>
+                  No service data available for the selected period
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </div>
@@ -539,7 +1819,12 @@ const DashboardScreen = () => {
         <div style={{ ...styles.chartCard, gridColumn: 'span 2' }}>
           <div style={styles.chartHeader}>
             <h3 style={styles.chartTitle}>Recent Orders</h3>
-            <button style={styles.viewAllButton}>View All</button>
+            <button 
+              style={styles.viewAllButton}
+              onClick={() => console.log('View all orders')}
+            >
+              View All
+            </button>
           </div>
           <div style={styles.chartContent}>
             <div style={styles.recentOrdersTable}>
@@ -563,10 +1848,12 @@ const DashboardScreen = () => {
                     </div>
                   </div>
                   <div style={styles.tableCell}>
-                    {new Date(order.created_at).toLocaleDateString('en-PH', {
+                    {order.created_at ? new Date(order.created_at).toLocaleDateString('en-PH', {
                       month: 'short',
-                      day: 'numeric'
-                    })}
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    }) : 'N/A'}
                   </div>
                   <div style={styles.tableCell}>
                     <span style={styles.amountCell}>₱{order.total?.toLocaleString() || 0}</span>
@@ -586,7 +1873,7 @@ const DashboardScreen = () => {
                       background: order.channel === 'mobile' ? '#e0f2fe' : '#f0f9ff',
                       color: order.channel === 'mobile' ? '#0369a1' : '#0c4a6e'
                     }}>
-                      {order.channel === 'mobile' ? <FaMobileAlt /> : <FaStore />}
+                      {order.channel === 'mobile' ? <FaMobileAlt size={12} /> : <FaStore size={12} />}
                       {order.channel === 'mobile' ? ' Mobile' : ' In-store'}
                     </span>
                   </div>
@@ -601,899 +1888,9 @@ const DashboardScreen = () => {
 };
 
 // ====================
-// ORDERS SCREEN COMPONENT
-// ====================
-const OrdersScreen = () => {
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [debugInfo, setDebugInfo] = useState('');
-  
-  // ... other state variables ...
-
-  // Fetch orders from database
-  const fetchOrders = async () => {
-    try {
-      setLoading(true);
-      setDebugInfo('🔄 Fetching orders...');
-      console.log('🔄 Fetching orders...');
-      
-      // First, let's check if we can connect to supabase
-      const { data: testData, error: testError } = await supabase
-        .from('orders')
-        .select('count')
-        .limit(1);
-      
-      if (testError) {
-        console.error('❌ Supabase connection error:', testError);
-        setDebugInfo(`❌ Connection error: ${testError.message}`);
-        return;
-      }
-      
-      console.log('✅ Supabase connection successful');
-      setDebugInfo('✅ Connected to database');
-      
-      // Fetch orders with all details
-      const { data, error, count } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          order_items (
-            *,
-            services (name, description, category, duration)
-          )
-        `)
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        console.error('❌ Error fetching orders:', error);
-        setDebugInfo(`❌ Fetch error: ${error.message}`);
-        throw error;
-      }
-      
-      console.log(`✅ Successfully fetched ${data?.length || 0} orders:`, data);
-      setDebugInfo(`✅ Found ${data?.length || 0} orders in database`);
-      
-      // If data is empty, try fetching without joins
-      if (!data || data.length === 0) {
-        console.log('⚠️ No orders found with joins, trying without...');
-        const { data: simpleData, error: simpleError } = await supabase
-          .from('orders')
-          .select('*')
-          .order('created_at', { ascending: false });
-          
-        if (simpleError) {
-          throw simpleError;
-        }
-        
-        console.log(`✅ Found ${simpleData?.length || 0} orders (simple query):`, simpleData);
-        setDebugInfo(`✅ Found ${simpleData?.length || 0} orders (simple query)`);
-        setOrders(simpleData || []);
-        return;
-      }
-      
-      setOrders(data || []);
-      
-    } catch (error) {
-      console.error('💥 Error in fetchOrders:', error);
-      setDebugInfo(`💥 Error: ${error.message}`);
-      
-      // Try alternative approach
-      try {
-        console.log('🔄 Trying alternative query...');
-        const { data: altData } = await supabase
-          .from('orders')
-          .select('id, customer_name, status, total, created_at')
-          .order('created_at', { ascending: false })
-          .limit(50);
-          
-        console.log('Alternative query result:', altData);
-        setOrders(altData || []);
-        setDebugInfo(`✅ Found ${altData?.length || 0} orders (alternative query)`);
-      } catch (altError) {
-        console.error('Alternative query failed:', altError);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // On component mount
-  useEffect(() => {
-    console.log('📦 OrdersScreen mounted');
-    fetchOrders();
-    
-    // Subscribe to real-time changes
-    const subscription = supabase
-      .channel('orders-realtime')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'orders' 
-        },
-        (payload) => {
-          console.log('📡 Real-time update received:', payload);
-          setDebugInfo(`📡 Real-time: ${payload.eventType} order #${payload.new?.id}`);
-          fetchOrders(); // Refresh orders on any change
-        }
-      )
-      .subscribe((status) => {
-        console.log('📡 Real-time subscription status:', status);
-      });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  // ... rest of the component code ...
-
-  // Add a debug panel to see what's happening
-  const renderDebugInfo = () => {
-    if (process.env.NODE_ENV === 'development') {
-      return (
-        <div style={{
-          background: '#f8fafc',
-          padding: '16px',
-          borderRadius: '8px',
-          marginBottom: '20px',
-          border: '1px solid #e2e8f0',
-          fontSize: '14px',
-          color: '#475569'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <strong>Debug Info:</strong>
-            <button 
-              onClick={fetchOrders}
-              style={{
-                background: '#0077b6',
-                color: 'white',
-                border: 'none',
-                padding: '8px 16px',
-                borderRadius: '6px',
-                fontSize: '12px',
-                cursor: 'pointer'
-              }}
-            >
-              Refresh Data
-            </button>
-          </div>
-          <div style={{ marginTop: '8px', fontFamily: 'monospace' }}>
-            {debugInfo || 'No debug info yet'}
-          </div>
-          <div style={{ marginTop: '8px', fontSize: '12px' }}>
-            Orders in state: {orders.length} | Loading: {loading.toString()}
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
-
-  return (
-    <div style={styles.screenContainer}>
-      <div style={styles.screenHeader}>
-        <div>
-          <h2 style={styles.screenTitle}>Admin Order Management</h2>
-          <p style={styles.screenSubtitle}>
-            {loading ? 'Loading...' : `${orders.length} orders found`}
-          </p>
-        </div>
-        <div style={styles.screenActions}>
-          <button style={styles.refreshButton} onClick={fetchOrders}>
-            <FaSync /> {loading ? 'Loading...' : 'Refresh'}
-          </button>
-        </div>
-      </div>
-
-      {renderDebugInfo()}
-
-      {/* Show loading state */}
-      {loading && orders.length === 0 ? (
-        <div style={styles.loadingContainer}>
-          <div style={styles.spinner}></div>
-          <p>Loading orders from database...</p>
-          <p style={{ fontSize: '14px', color: '#6b7280', marginTop: '10px' }}>
-            {debugInfo}
-          </p>
-        </div>
-      ) : (
-        // Show orders table when data is loaded
-        <div style={styles.ordersTableContainer}>
-          <table style={styles.ordersTable}>
-            <thead>
-              <tr>
-                <th style={styles.th}>Order ID</th>
-                <th style={styles.th}>Customer</th>
-                <th style={styles.th}>Amount</th>
-                <th style={styles.th}>Date</th>
-                <th style={styles.th}>Status</th>
-                <th style={styles.th}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orders.length === 0 ? (
-                <tr>
-                  <td colSpan="6" style={{ 
-                    textAlign: 'center', 
-                    padding: '40px',
-                    color: '#6b7280'
-                  }}>
-                    <div style={{ marginBottom: '16px' }}>
-                      <FaShoppingBag size={48} color="#d1d5db" />
-                    </div>
-                    <h3 style={{ marginBottom: '8px' }}>No Orders Found</h3>
-                    <p style={{ marginBottom: '20px' }}>
-                      There are no orders in the database yet.
-                    </p>
-                    <div style={{ 
-                      background: '#f8fafc', 
-                      padding: '16px', 
-                      borderRadius: '8px',
-                      textAlign: 'left',
-                      maxWidth: '500px',
-                      margin: '0 auto'
-                    }}>
-                      <h4 style={{ marginBottom: '8px' }}>Debug Tips:</h4>
-                      <ul style={{ 
-                        margin: '0', 
-                        paddingLeft: '20px',
-                        fontSize: '14px'
-                      }}>
-                        <li>Check if orders table exists in Supabase</li>
-                        <li>Verify your Supabase connection settings</li>
-                        <li>Check browser console for errors</li>
-                        <li>Try creating a test order first</li>
-                      </ul>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                orders.map((order) => (
-                  <tr key={order.id} style={styles.tr}>
-                    <td style={styles.td}>
-                      <div style={styles.orderId}>#{order.id}</div>
-                    </td>
-                    <td style={styles.td}>
-                      <div style={styles.customerCell}>
-                        <div style={styles.customerName}>
-                          {order.customer_name || 'Walk-in Customer'}
-                        </div>
-                        <div style={styles.customerContact}>
-                          {order.customer_phone || 'No phone'}
-                        </div>
-                      </div>
-                    </td>
-                    <td style={styles.td}>
-                      <div style={styles.amountCell}>
-                        ₱{order.total?.toLocaleString() || '0'}
-                      </div>
-                    </td>
-                    <td style={styles.td}>
-                      {new Date(order.created_at).toLocaleDateString()}
-                    </td>
-                    <td style={styles.td}>
-                      <span style={{
-                        ...styles.statusBadge,
-                        background: getStatusColor(order.status).background,
-                        color: getStatusColor(order.status).color
-                      }}>
-                        {order.status?.toUpperCase() || 'PENDING'}
-                      </span>
-                    </td>
-                    <td style={styles.td}>
-                      <button
-                        style={styles.viewButton}
-                        onClick={() => {
-                          setSelectedOrder(order);
-                          setShowDetails(true);
-                        }}
-                      >
-                        <FaEye /> View
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-
-      {/* Order Details Modal */}
-      {showDetails && selectedOrder && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modal}>
-            <div style={styles.modalHeader}>
-              <h2>Order Details #{selectedOrder.id}</h2>
-              <button style={styles.closeButton} onClick={() => setShowDetails(false)}>
-                ×
-              </button>
-            </div>
-            
-            <div style={styles.modalContent}>
-              {/* Quick Actions Bar */}
-              <div style={styles.quickActions}>
-                {selectedOrder.status === 'pending' && (
-                  <>
-                    <button 
-                      style={styles.quickAcceptButton}
-                      onClick={() => acceptOrder(selectedOrder.id)}
-                    >
-                      <FaCheckCircle /> Accept Order
-                    </button>
-                    <button 
-                      style={styles.quickDeclineButton}
-                      onClick={() => {
-                        setShowDetails(false);
-                        setShowActionPanel(true);
-                      }}
-                    >
-                      <FaTimesCircle /> Decline Order
-                    </button>
-                  </>
-                )}
-                {selectedOrder.status === 'confirmed' && (
-                  <button 
-                    style={styles.quickProgressButton}
-                    onClick={() => markInProgress(selectedOrder.id)}
-                  >
-                    <FaClock /> Start Progress
-                  </button>
-                )}
-                {selectedOrder.status === 'in_progress' && (
-                  <button 
-                    style={styles.quickCompleteButton}
-                    onClick={() => completeOrder(selectedOrder.id)}
-                  >
-                    <FaCheckCircle /> Mark Complete
-                  </button>
-                )}
-              </div>
-
-              {/* Order Information */}
-              <div style={styles.orderInfoGrid}>
-                <div style={styles.infoGroup}>
-                  <h3 style={styles.infoTitle}>Customer Information</h3>
-                  <div style={styles.infoRow}>
-                    <span style={styles.infoLabel}>Name:</span>
-                    <span style={styles.infoValue}>{selectedOrder.customer_name || 'Walk-in Customer'}</span>
-                  </div>
-                  <div style={styles.infoRow}>
-                    <span style={styles.infoLabel}>Phone:</span>
-                    <span style={styles.infoValue}>{selectedOrder.customer_phone || 'N/A'}</span>
-                  </div>
-                  <div style={styles.infoRow}>
-                    <span style={styles.infoLabel}>Email:</span>
-                    <span style={styles.infoValue}>{selectedOrder.customer_email || 'N/A'}</span>
-                  </div>
-                </div>
-
-                <div style={styles.infoGroup}>
-                  <h3 style={styles.infoTitle}>Order Information</h3>
-                  <div style={styles.infoRow}>
-                    <span style={styles.infoLabel}>Status:</span>
-                    <span style={{
-                      ...styles.statusBadge,
-                      background: getStatusColor(selectedOrder.status).background,
-                      color: getStatusColor(selectedOrder.status).color
-                    }}>
-                      {selectedOrder.status?.toUpperCase()}
-                    </span>
-                  </div>
-                  <div style={styles.infoRow}>
-                    <span style={styles.infoLabel}>Channel:</span>
-                    <span style={styles.infoValue}>{selectedOrder.channel || 'walk-in'}</span>
-                  </div>
-                  <div style={styles.infoRow}>
-                    <span style={styles.infoLabel}>Payment:</span>
-                    <span style={styles.infoValue}>{selectedOrder.payment_method || 'cash'}</span>
-                  </div>
-                  <div style={styles.infoRow}>
-                    <span style={styles.infoLabel}>Order Date:</span>
-                    <span style={styles.infoValue}>
-                      {new Date(selectedOrder.created_at).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Order Items */}
-              <div style={styles.itemsSection}>
-                <h3 style={styles.sectionTitle}>Order Items</h3>
-                <div style={styles.itemsTable}>
-                  {selectedOrder.order_items?.map((item, index) => (
-                    <div key={index} style={styles.itemRow}>
-                      <div style={styles.itemInfo}>
-                        <div style={styles.itemName}>
-                          {item.services?.name || `Service #${item.service_id}`}
-                        </div>
-                        <div style={styles.itemDescription}>
-                          {item.services?.description || 'Service item'}
-                          {item.services?.duration && (
-                            <span style={{marginLeft: '8px', color: '#6b7280'}}>
-                              ({item.services.duration} mins)
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div style={styles.itemDetails}>
-                        <div style={styles.itemQuantity}>Qty: {item.quantity || 1}</div>
-                        <div style={styles.itemPrice}>₱{item.price?.toLocaleString() || 0} each</div>
-                        <div style={styles.itemTotal}>
-                          ₱{((item.price || 0) * (item.quantity || 1)).toLocaleString()}
-                        </div>
-                      </div>
-                    </div>
-                  )) || (
-                    <div style={{textAlign: 'center', padding: '20px', color: '#6b7280'}}>
-                      No items found in this order
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Order Total */}
-              <div style={styles.totalSection}>
-                <div style={styles.totalRow}>
-                  <span style={styles.totalLabel}>Subtotal:</span>
-                  <span style={styles.totalValue}>₱{selectedOrder.subtotal?.toLocaleString() || '0'}</span>
-                </div>
-                <div style={styles.totalRow}>
-                  <span style={styles.totalLabel}>Tax:</span>
-                  <span style={styles.totalValue}>₱{selectedOrder.tax?.toLocaleString() || '0'}</span>
-                </div>
-                <div style={styles.totalRow}>
-                  <span style={styles.totalLabel}>Discount:</span>
-                  <span style={styles.totalValue}>-₱{selectedOrder.discount?.toLocaleString() || '0'}</span>
-                </div>
-                <div style={{...styles.totalRow, borderTop: '2px solid #e5e7eb', paddingTop: '12px'}}>
-                  <span style={{...styles.totalLabel, fontWeight: 'bold', fontSize: '18px'}}>Total:</span>
-                  <span style={{...styles.totalValue, fontSize: '24px', fontWeight: 'bold', color: '#0077b6'}}>
-                    ₱{calculateOrderTotal(selectedOrder).toLocaleString()}
-                  </span>
-                </div>
-              </div>
-
-              {/* Admin Notes */}
-              {selectedOrder.admin_notes && (
-                <div style={styles.notesSection}>
-                  <h3 style={styles.sectionTitle}>Admin Notes</h3>
-                  <div style={styles.notesBox}>
-                    {selectedOrder.admin_notes}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div style={styles.modalActions}>
-              <button style={styles.printButton} onClick={() => window.print()}>
-                <FaPrint /> Print Receipt
-              </button>
-              <button style={styles.closeModalButton} onClick={() => setShowDetails(false)}>
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Action Panel for Decline/Cancel */}
-      {showActionPanel && selectedOrder && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.actionModal}>
-            <div style={styles.modalHeader}>
-              <h3>
-                {selectedOrder.status === 'pending' ? 'Decline Order' : 'Cancel Order'} #{selectedOrder.id}
-              </h3>
-              <button 
-                style={styles.closeButton} 
-                onClick={() => {
-                  setShowActionPanel(false);
-                  setActionMessage('');
-                }}
-              >
-                ×
-              </button>
-            </div>
-            
-            <div style={styles.modalContent}>
-              <div style={styles.warningBox}>
-                <FaTimesCircle size={24} color="#ef4444" />
-                <div>
-                  <h4 style={{margin: '0 0 8px 0', color: '#991b1b'}}>
-                    {selectedOrder.status === 'pending' ? 'Decline Order' : 'Cancel Order'}
-                  </h4>
-                  <p style={{margin: 0, color: '#6b7280'}}>
-                    {selectedOrder.status === 'pending' 
-                      ? 'This order will be marked as declined. Please provide a reason for declining.'
-                      : 'This order will be cancelled. Please provide a reason for cancellation.'}
-                  </p>
-                </div>
-              </div>
-
-              <div style={styles.formGroup}>
-                <label style={styles.formLabel}>
-                  Reason for {selectedOrder.status === 'pending' ? 'declining' : 'cancelling'} *
-                </label>
-                <textarea
-                  value={actionMessage}
-                  onChange={(e) => setActionMessage(e.target.value)}
-                  style={styles.actionTextarea}
-                  placeholder="Enter reason for declining/cancelling this order..."
-                  rows="4"
-                  required
-                />
-              </div>
-
-              <div style={styles.actionModalButtons}>
-                <button
-                  style={styles.cancelActionButton}
-                  onClick={() => {
-                    setShowActionPanel(false);
-                    setActionMessage('');
-                  }}
-                  disabled={processingAction}
-                >
-                  Go Back
-                </button>
-                <button
-                  style={styles.confirmActionButton}
-                  onClick={() => declineOrder(selectedOrder.id, actionMessage)}
-                  disabled={!actionMessage.trim() || processingAction}
-                >
-                  {processingAction ? 'Processing...' : 'Confirm ' + 
-                    (selectedOrder.status === 'pending' ? 'Decline' : 'Cancel')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ====================
 // SERVICES SCREEN COMPONENT
 // ====================
-const ServicesScreen = () => {
-  const [services, setServices] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [editingService, setEditingService] = useState(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    category: 'maintenance',
-    price: 0,
-    duration: 60,
-    active: true
-  });
 
-  useEffect(() => {
-    fetchServices();
-  }, []);
-
-  const fetchServices = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('services')
-        .select('*')
-        .order('category', { ascending: true })
-        .order('price', { ascending: false });
-
-      if (error) throw error;
-      setServices(data || []);
-    } catch (error) {
-      console.error('Error fetching services:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const serviceData = {
-        ...formData,
-        price: parseFloat(formData.price),
-        duration: parseInt(formData.duration)
-      };
-
-      if (editingService) {
-        const { error } = await supabase
-          .from('services')
-          .update(serviceData)
-          .eq('id', editingService.id);
-
-        if (error) throw error;
-        alert('Service updated successfully!');
-      } else {
-        const { error } = await supabase
-          .from('services')
-          .insert([serviceData]);
-
-        if (error) throw error;
-        alert('Service added successfully!');
-      }
-
-      fetchServices();
-      resetForm();
-    } catch (error) {
-      console.error('Error saving service:', error);
-      alert('Error saving service: ' + error.message);
-    }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      description: '',
-      category: 'maintenance',
-      price: 0,
-      duration: 60,
-      active: true
-    });
-    setEditingService(null);
-    setShowForm(false);
-  };
-
-  const editService = (service) => {
-    setEditingService(service);
-    setFormData({
-      name: service.name,
-      description: service.description,
-      category: service.category,
-      price: service.price,
-      duration: service.duration,
-      active: service.active
-    });
-    setShowForm(true);
-  };
-
-  const toggleServiceStatus = async (serviceId, currentStatus) => {
-    try {
-      const { error } = await supabase
-        .from('services')
-        .update({ active: !currentStatus })
-        .eq('id', serviceId);
-
-      if (error) throw error;
-
-      setServices(prev => prev.map(service => 
-        service.id === serviceId ? { ...service, active: !currentStatus } : service
-      ));
-    } catch (error) {
-      console.error('Error updating service status:', error);
-      alert('Error updating service: ' + error.message);
-    }
-  };
-
-  const getCategoryIcon = (category) => {
-    switch (category) {
-      case 'maintenance':
-        return <FaOilCan />;
-      case 'repair':
-        return <FaTools />;
-      case 'tires':
-        return <FaCarAlt />;
-      case 'car_wash':
-        return <FaCar />;
-      case 'inspection':
-        return <FaShieldAlt />;
-      default:
-        return <FaTag />;
-    }
-  };
-
-  if (loading) {
-    return (
-      <div style={styles.loadingContainer}>
-        <div style={styles.spinner}></div>
-        <p style={styles.loadingText}>Loading services...</p>
-      </div>
-    );
-  }
-
-  return (
-    <div style={styles.screenContainer}>
-      <div style={styles.screenHeader}>
-        <div>
-          <h2 style={styles.screenTitle}>Service Management</h2>
-          <p style={styles.screenSubtitle}>{services.length} services available</p>
-        </div>
-        <button 
-          style={styles.addButton} 
-          onClick={() => setShowForm(true)}
-        >
-          <FaPlus /> Add Service
-        </button>
-      </div>
-
-      {/* Service Form Modal */}
-      {showForm && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modal}>
-            <div style={styles.modalHeader}>
-              <h2>{editingService ? 'Edit Service' : 'Add New Service'}</h2>
-              <button style={styles.closeButton} onClick={resetForm}>
-                ×
-              </button>
-            </div>
-            <form onSubmit={handleSubmit} style={styles.form}>
-              <div style={styles.formGrid}>
-                <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>Service Name *</label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    style={styles.formInput}
-                    required
-                    placeholder="e.g., Oil Change, Tire Rotation"
-                  />
-                </div>
-
-                <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>Category</label>
-                  <select
-                    value={formData.category}
-                    onChange={(e) => setFormData({...formData, category: e.target.value})}
-                    style={styles.formInput}
-                  >
-                    <option value="maintenance">Maintenance</option>
-                    <option value="repair">Repair</option>
-                    <option value="tires">Tires</option>
-                    <option value="car_wash">Car Wash</option>
-                    <option value="inspection">Inspection</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-
-                <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>Price (₱) *</label>
-                  <input
-                    type="number"
-                    value={formData.price}
-                    onChange={(e) => setFormData({...formData, price: e.target.value})}
-                    style={styles.formInput}
-                    required
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-
-                <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>Duration (minutes)</label>
-                  <input
-                    type="number"
-                    value={formData.duration}
-                    onChange={(e) => setFormData({...formData, duration: e.target.value})}
-                    style={styles.formInput}
-                    min="1"
-                  />
-                </div>
-              </div>
-
-              <div style={styles.formGroup}>
-                <label style={styles.formLabel}>Description</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  style={styles.formTextarea}
-                  placeholder="Describe the service details..."
-                  rows="3"
-                />
-              </div>
-
-              <div style={styles.formGroup}>
-                <label style={styles.formLabel}>
-                  <input
-                    type="checkbox"
-                    checked={formData.active}
-                    onChange={(e) => setFormData({...formData, active: e.target.checked})}
-                    style={{ marginRight: '8px' }}
-                  />
-                  Active (Available for booking)
-                </label>
-              </div>
-
-              <div style={styles.formActions}>
-                <button 
-                  type="button" 
-                  style={styles.cancelButton}
-                  onClick={resetForm}
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit" 
-                  style={styles.submitButton}
-                >
-                  {editingService ? 'Update Service' : 'Add Service'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Services Grid */}
-      <div style={styles.servicesGrid}>
-        {services.map(service => (
-          <div key={service.id} style={styles.serviceCard}>
-            <div style={styles.serviceCardHeader}>
-              <div style={{
-                ...styles.serviceIcon,
-                background: getCategoryColor(service.category)
-              }}>
-                {getCategoryIcon(service.category)}
-              </div>
-              <div style={styles.serviceStatus}>
-                <div style={{
-                  ...styles.statusDot,
-                  background: service.active ? '#10b981' : '#ef4444'
-                }} />
-                <span>{service.active ? 'Active' : 'Inactive'}</span>
-              </div>
-            </div>
-
-            <div style={styles.serviceCardBody}>
-              <h3 style={styles.serviceName}>{service.name}</h3>
-              <p style={styles.serviceDescription}>{service.description || 'No description provided.'}</p>
-              
-              <div style={styles.serviceDetails}>
-                <div style={styles.detailItem}>
-                  <div style={styles.detailLabel}>Category</div>
-                  <div style={styles.detailValue}>
-                    <span style={{
-                      background: '#e0f2fe',
-                      color: '#0369a1',
-                      padding: '4px 8px',
-                      borderRadius: '6px',
-                      fontSize: '12px',
-                      fontWeight: '500'
-                    }}>
-                      {service.category}
-                    </span>
-                  </div>
-                </div>
-                <div style={styles.detailItem}>
-                  <div style={styles.detailLabel}>Duration</div>
-                  <div style={styles.detailValue}>{service.duration} min</div>
-                </div>
-              </div>
-            </div>
-
-            <div style={styles.serviceCardFooter}>
-              <div style={styles.servicePrice}>
-                <div style={styles.priceLabel}>Price</div>
-                <div style={styles.priceValue}>₱{service.price.toLocaleString()}</div>
-              </div>
-              <div style={styles.serviceActions}>
-                <button
-                  style={styles.editButton}
-                  onClick={() => editService(service)}
-                >
-                  <FaEdit /> Edit
-                </button>
-                <button
-                  style={service.active ? styles.deactivateButton : styles.activateButton}
-                  onClick={() => toggleServiceStatus(service.id, service.active)}
-                >
-                  {service.active ? 'Deactivate' : 'Activate'}
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
 
 // ====================
 // BOOKING MANAGEMENT COMPONENT
@@ -1503,8 +1900,7 @@ const BookingManagement = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [bookingToDelete, setBookingToDelete] = useState(null);
+
   useEffect(() => {
     fetchBookings();
   }, []);
@@ -1512,42 +1908,53 @@ const BookingManagement = () => {
   const fetchBookings = async () => {
     try {
       setLoading(true);
-      console.log('🔄 Fetching bookings...');
       
-      const { data: bookingsData, error: bookingsError } = await supabase
+      // Try different table names based on your Supabase setup
+      let bookingsData;
+      let bookingsError;
+      
+      // Try 'bookings' table first
+      ({ data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
         .select('*')
-        .order('created_at', { ascending: false });
-
+        .order('created_at', { ascending: false }));
+      
+      // If 'bookings' doesn't exist, try 'appointments'
+      if (bookingsError && bookingsError.code === 'PGRST116') {
+        console.log('Bookings table not found, trying appointments...');
+        ({ data: bookingsData, error: bookingsError } = await supabase
+          .from('appointments')
+          .select('*')
+          .order('created_at', { ascending: false }));
+      }
+      
       if (bookingsError) {
-        console.error('❌ Bookings fetch error:', bookingsError);
-        alert('Error loading bookings: ' + bookingsError.message);
+        console.error('Bookings fetch error:', bookingsError);
+        // Set empty array if table doesn't exist
         setBookings([]);
         setLoading(false);
         return;
       }
 
-      console.log(`✅ Found ${bookingsData?.length || 0} bookings:`, bookingsData);
-
       const formattedBookings = (bookingsData || []).map(booking => ({
         id: booking.id,
-        customer_name: booking.name || 'Guest',
-        customer_email: booking.email || 'No email',
-        customer_phone: booking.contact || 'No phone',
-        service_name: booking.service || 'General Service',
-        scheduled_date: booking.date || new Date().toISOString().split('T')[0],
-        scheduled_time: booking.time || '10:00',
+        customer_name: booking.name || booking.customer_name || 'Guest',
+        customer_email: booking.email || booking.customer_email || 'No email',
+        customer_phone: booking.contact || booking.customer_phone || 'No phone',
+        service_name: booking.service || booking.service_name || 'General Service',
+        scheduled_date: booking.date || booking.scheduled_date || new Date().toISOString().split('T')[0],
+        scheduled_time: booking.time || booking.scheduled_time || '10:00',
         status: booking.status || 'pending',
-        notes: booking.message || '',
+        notes: booking.message || booking.notes || '',
         location: booking.location || 'N/A',
-        created_at: booking.created_at
+        created_at: booking.created_at || new Date().toISOString()
       }));
 
       setBookings(formattedBookings);
       
     } catch (error) {
-      console.error('💥 Error in fetchBookings:', error);
-      alert('Failed to load bookings: ' + error.message);
+      console.error('Error in fetchBookings:', error);
+      setBookings([]);
     } finally {
       setLoading(false);
     }
@@ -1555,7 +1962,6 @@ const BookingManagement = () => {
 
   const updateBookingStatus = async (bookingId, newStatus) => {
     try {
-      console.log('Updating booking status:', { bookingId, newStatus });
       const { error } = await supabase
         .from('bookings')
         .update({ status: newStatus })
@@ -1575,7 +1981,7 @@ const BookingManagement = () => {
   };
 
   const deleteBooking = async (bookingId) => {
-    if (!('Are you sure you want to delete this booking?')) return;
+    if (!window.confirm('Are you sure you want to delete this booking?')) return;
 
     try {
       const { error } = await supabase
@@ -1623,7 +2029,7 @@ const BookingManagement = () => {
   if (loading) {
     return (
       <div style={styles.loadingContainer}>
-        <div style={styles.spinner}></div>
+        <div className="spinner" />
         <p>Loading bookings...</p>
       </div>
     );
@@ -1688,49 +2094,8 @@ const BookingManagement = () => {
         </div>
       </div>
 
-      {/* Filters */}
-      <div style={styles.filtersPanel}>
-        <div style={styles.filterRow}>
-          <div style={styles.searchGroup}>
-            <FaSearch style={styles.searchIcon} />
-            <input
-              type="text"
-              placeholder="Search by customer name, email, phone, or service..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={styles.searchInput}
-            />
-          </div>
-
-          <div style={styles.filterGroup}>
-            <label style={styles.filterLabel}>Status Filter</label>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              style={styles.filterSelect}
-            >
-              <option value="all">All Statuses</option>
-              <option value="pending">Pending</option>
-              <option value="confirmed">Confirmed</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </div>
-
-          <button
-            style={styles.clearButton}
-            onClick={() => {
-              setSearchTerm('');
-              setStatusFilter('all');
-            }}
-          >
-            <FaFilter /> Clear Filters
-          </button>
-        </div>
-      </div>
-
       {/* Bookings Table */}
-      <div style={styles.ordersTable}>
+      <div style={styles.ordersTableContainer}>
         <table style={styles.table}>
           <thead>
             <tr>
@@ -1745,8 +2110,8 @@ const BookingManagement = () => {
           <tbody>
             {filteredBookings.length === 0 ? (
               <tr>
-                <td colSpan="6" style={{ textAlign: 'center', padding: '40px' }}>
-                  No bookings found
+                <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
+                  No bookings found. {bookings.length === 0 ? 'No bookings in the system.' : 'Try a different search.'}
                 </td>
               </tr>
             ) : (
@@ -1833,398 +2198,348 @@ const BookingManagement = () => {
 };
 
 // ====================
-// CUSTOMERS SCREEN
+// REPORTS/ANALYTICS SCREEN COMPONENT
 // ====================
-const CustomersScreen = () => {
-  const [customers, setCustomers] = useState([]);
+
+// ====================
+// MAIN COMPONENT
+// ====================
+const SalesManagement = () => {
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [realtimeOrders, setRealtimeOrders] = useState(0);
+  const [notifications, setNotifications] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    fetchCustomers();
-  }, []);
-
-  const fetchCustomers = async () => {
+  // Function to fetch orders
+  const fetchOrdersData = useCallback(async () => {
     try {
-      setLoading(true);
-      const { data: usersData, error: usersError } = await supabase
-        .from('users')
+      console.log('🔄 Starting fetchOrders...');
+      setRefreshing(true);
+      
+      // Get all orders with order_items and products
+      const { data: ordersData, error } = await supabase
+        .from('orders')
         .select(`
-          id,
-          email,
-          created_at,
-          profiles (full_name, phone, address)
+          *,
+          order_items (
+            id,
+            product_id,
+            quantity,
+            price,
+            products (
+              id,
+              name,
+              price,
+              image_url
+            )
+          )
         `)
         .order('created_at', { ascending: false });
 
-      if (usersError) throw usersError;
-
-      const { data: ordersData } = await supabase
-        .from('orders')
-        .select('customer_id, total');
-
-      const orderTotals = {};
-      const orderCounts = {};
-      ordersData?.forEach(order => {
-        if (order.customer_id) {
-          orderTotals[order.customer_id] = (orderTotals[order.customer_id] || 0) + (order.total || 0);
-          orderCounts[order.customer_id] = (orderCounts[order.customer_id] || 0) + 1;
+      console.log('📊 Orders data with items:', ordersData);
+      
+      if (error) throw error;
+      
+      // Get user IDs from orders
+      const userIds = [...new Set(ordersData.map(order => order.user_id).filter(Boolean))];
+      console.log('👤 User IDs found:', userIds);
+      
+      // Fetch user data from the PUBLIC users table
+      let usersMap = {};
+      if (userIds.length > 0) {
+        const { data: usersData, error: usersError } = await supabase
+          .from('users')
+          .select('id, full_name, email, phone')
+          .in('id', userIds);
+        
+        console.log('👥 Users data from public.users:', usersData);
+        
+        if (!usersError && usersData) {
+          usersData.forEach(user => {
+            usersMap[user.id] = {
+              email: user.email,
+              phone: user.phone,
+              full_name: user.full_name
+            };
+          });
         }
+        console.log('🗺️ Users map:', usersMap);
+      }
+      
+      const formattedOrders = ordersData.map(order => {
+        const user = usersMap[order.user_id];
+        
+        // Extract product details from order_items
+        const products = order.order_items?.map(item => ({
+          product_id: item.product_id,
+          name: item.products?.name || `Product #${item.product_id}`,
+          quantity: item.quantity || 1,
+          price: item.price || 0,
+          image_url: item.products?.image_url || null
+        })) || [];
+        
+        // Calculate total items count
+        const totalItems = products.reduce((sum, product) => sum + (product.quantity || 1), 0);
+        
+        return {
+          id: order.id,
+          // Customer data
+          customer_name: order.customer_name || (user?.full_name || 'Customer'),
+          customer_email: order.customer_email || (user?.email || ''),
+          customer_phone: order.customer_phone || (user?.phone || ''),
+          total: order.total || order.total_amount || 0,
+          status: order.status || 'pending',
+          payment_method: order.payment_method || 'cash',
+          payment_status: order.payment_status || 'pending',
+          channel: order.channel || 'walk-in',
+          notes: order.notes || '',
+          created_at: order.created_at,
+          user_id: order.user_id,
+          // Product data
+          products: products,
+          total_items: totalItems,
+          // Additional fields for display
+          product_count: products.length,
+          has_products: products.length > 0,
+          subtotal: order.subtotal || 0,
+          tax: order.tax || 0,
+          discount: order.discount || 0,
+          profile_full_name: user?.full_name || null
+        };
       });
-
-      const enrichedCustomers = usersData.map(user => ({
-        id: user.id,
-        email: user.email,
-        name: user.profiles?.full_name || 'Unknown',
-        phone: user.profiles?.phone || 'N/A',
-        address: user.profiles?.address || 'N/A',
-        joined_date: new Date(user.created_at).toLocaleDateString(),
-        total_orders: orderCounts[user.id] || 0,
-        total_spent: orderTotals[user.id] || 0,
-        last_order: 'N/A'
-      }));
-
-      setCustomers(enrichedCustomers);
+      
+      console.log('📝 Final formatted orders with products:', formattedOrders);
+      setOrders(formattedOrders);
+      
+      // Update dashboard counter with count of recent orders (e.g., from last 24 hours)
+      const twentyFourHoursAgo = new Date();
+      twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+      
+      const recentOrders = formattedOrders.filter(order => 
+        new Date(order.created_at) >= twentyFourHoursAgo
+      ) || [];
+      
+      setRealtimeOrders(recentOrders.length);
+      
     } catch (error) {
-      console.error('Error fetching customers:', error);
+      console.error('Error:', error);
+      setOrders([]);
     } finally {
+      setRefreshing(false);
       setLoading(false);
     }
+  }, []);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchOrdersData();
+  }, [fetchOrdersData]);
+
+  // Real-time subscription
+  useEffect(() => {
+    const orderSubscription = supabase
+      .channel('orders')
+      .on('postgres_changes', 
+        { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'orders' 
+        },
+        (payload) => {
+          console.log('New order received:', payload.new);
+          // Refresh orders when new order is added
+          fetchOrdersData();
+        }
+      )
+      .on('postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'orders'
+        },
+        (payload) => {
+          console.log('Order updated:', payload.new);
+          // Refresh orders when order is updated
+          fetchOrdersData();
+        }
+      )
+      .on('postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'orders'
+        },
+        (payload) => {
+          console.log('Order deleted:', payload.old);
+          // Refresh orders when order is deleted
+          fetchOrdersData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      orderSubscription.unsubscribe();
+    };
+  }, [fetchOrdersData]);
+
+  // Function to mark notifications as read
+  const markAsRead = (notificationId) => {
+    setNotifications(prev => prev.map(notification =>
+      notification.id === notificationId ? { ...notification, read: true } : notification
+    ));
   };
 
-  if (loading) {
-    return (
-      <div style={styles.loadingContainer}>
-        <div style={styles.spinner}></div>
-        <p style={styles.loadingText}>Loading customers...</p>
-      </div>
-    );
-  }
+  // Function to clear all notifications
+  const clearNotifications = () => {
+    setNotifications([]);
+  };
+
+  const tabs = [
+    { key: 'dashboard', icon: <FaChartBar />, label: 'Dashboard', count: realtimeOrders },
+    { key: 'orders', icon: <FaShoppingBag />, label: 'Orders' },
+    { key: 'bookings', icon: <FaCalendarCheck />, label: 'Bookings' },
+   
+   
+  ];
 
   return (
-    <div style={styles.screenContainer}>
-      <div style={styles.screenHeader}>
-        <div>
-          <h2 style={styles.screenTitle}>Customer Management</h2>
-          <p style={styles.screenSubtitle}>{customers.length} customers registered</p>
+    <div style={styles.container}>
+      <style>
+        {`
+         /* Add these to your global CSS file */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid #e5e7eb;
+  border-top: 4px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.notification-slide {
+  animation: slideIn 0.3s ease-out;
+}
+        `}
+      </style>
+      
+      <div style={styles.header}>
+        <div style={styles.headerContent}>
+          <div>
+            <h1 style={styles.title}>
+              <FaShoppingBag style={{ marginRight: '12px' }} />
+              Sales Management
+              {realtimeOrders > 0 && (
+                <span style={{
+                  marginLeft: '12px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  background: '#ef4444',
+                  color: 'white',
+                  padding: '4px 12px',
+                  borderRadius: '20px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  <span className="pulse">●</span>
+                  {realtimeOrders} new order{realtimeOrders !== 1 ? 's' : ''}
+                </span>
+              )}
+            </h1>
+            <p style={styles.subtitle}>Track sales, manage orders, and analyze performance</p>
+          </div>
+          <div style={styles.headerActions}>
+            {/* Refresh Button */}
+            <button
+              onClick={() => {
+                fetchOrdersData();
+              }}
+              disabled={refreshing}
+              style={{
+                background: 'rgba(255, 255, 255, 0.2)',
+                color: 'white',
+                border: '1px solid rgba(255, 255, 255, 0.3)',
+                padding: '8px 16px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '14px',
+                fontWeight: '500',
+                opacity: refreshing ? 0.7 : 1
+              }}
+            >
+              <FaSync style={refreshing ? { animation: 'spin 1s linear infinite' } : {}} />
+              {refreshing ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
         </div>
-        <button style={styles.exportButton}>
-          <FaDownload /> Export Customers
-        </button>
       </div>
 
-      <div style={styles.customersTable}>
-        <div style={styles.tableHeader}>
-          <div style={styles.tableCell}>Customer</div>
-          <div style={styles.tableCell}>Contact</div>
-          <div style={styles.tableCell}>Joined Date</div>
-          <div style={styles.tableCell}>Total Orders</div>
-          <div style={styles.tableCell}>Total Spent</div>
-          <div style={styles.tableCell}>Actions</div>
-        </div>
-        {customers.map((customer, index) => (
-          <div key={index} style={styles.tableRow}>
-            <div style={styles.tableCell}>
-              <div style={styles.customerCell}>
-                <div style={styles.customerAvatar}>
-                  {customer.name[0].toUpperCase()}
-                </div>
-                <div>
-                  <div style={styles.customerName}>{customer.name}</div>
-                  <div style={styles.customerEmail}>{customer.email}</div>
-                </div>
-              </div>
-            </div>
-            <div style={styles.tableCell}>
-              <div style={styles.contactCell}>
-                <div style={styles.contactPhone}>{customer.phone}</div>
-                <div style={styles.contactAddress}>{customer.address}</div>
-              </div>
-            </div>
-            <div style={styles.tableCell}>{customer.joined_date}</div>
-            <div style={styles.tableCell}>
-              <span style={styles.orderCount}>{customer.total_orders}</span>
-            </div>
-            <div style={styles.tableCell}>
-              <span style={styles.totalSpent}>₱{customer.total_spent.toLocaleString()}</span>
-            </div>
-            <div style={styles.tableCell}>
-              <button style={styles.viewCustomerButton}>
-                <FaEye /> View
-              </button>
-            </div>
-          </div>
+      <div style={styles.tabContainer}>
+        {tabs.map(tab => (
+          <button
+            key={tab.key}
+            style={{
+              ...styles.tabButton,
+              background: activeTab === tab.key ? 'linear-gradient(135deg, #0077b6 0%, #00b4d8 100%)' : 'transparent',
+              color: activeTab === tab.key ? '#ffffff' : '#023e8a',
+              borderBottom: activeTab === tab.key ? '3px solid #0077b6' : 'none',
+              position: 'relative'
+            }}
+            onClick={() => setActiveTab(tab.key)}
+          >
+            <span style={styles.tabIcon}>{tab.icon}</span>
+            <span style={styles.tabLabel}>{tab.label}</span>
+            {tab.count > 0 && (
+              <span style={{
+                ...styles.tabBadge,
+                animation: tab.key === 'dashboard' && tab.count > 0 ? 'pulse 2s infinite' : 'none'
+              }}>
+                {tab.count}
+              </span>
+            )}
+          </button>
         ))}
       </div>
-    </div>
-  );
-};
 
-// ====================
-// ANALYTICS SCREEN
-// ====================
-const AnalyticsScreen = () => {
-  const [analyticsData, setAnalyticsData] = useState({
-    salesTrend: [],
-    topCustomers: [],
-    servicePerformance: [],
-    revenueByChannel: []
-  });
-  const [loading, setLoading] = useState(true);
-  const [dateRange, setDateRange] = useState('month');
-
-  useEffect(() => {
-    fetchAnalyticsData();
-  }, [dateRange]);
-
-  const fetchAnalyticsData = async () => {
-    try {
-      setLoading(true);
+      <div style={styles.content}>
+        {activeTab === 'dashboard' && <DashboardScreen orders={orders} />}
+        {activeTab === 'orders' && <OrdersScreen orders={orders} fetchOrders={fetchOrdersData} />}
       
-      const [ordersResponse, customersResponse, servicesResponse] = await Promise.all([
-        supabase.from('orders').select('*').gte('created_at', getDateFilter()),
-        supabase.from('users').select('id, email, created_at'),
-        supabase.from('services').select('*')
-      ]);
-
-      const salesTrend = processSalesTrend(ordersResponse.data || []);
-      const topCustomers = processTopCustomers(ordersResponse.data || []);
-      const servicePerformance = processServicePerformance(ordersResponse.data || []);
-      const revenueByChannel = processRevenueByChannel(ordersResponse.data || []);
-
-      setAnalyticsData({
-        salesTrend,
-        topCustomers,
-        servicePerformance,
-        revenueByChannel
-      });
-    } catch (error) {
-      console.error('Error fetching analytics:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getDateFilter = () => {
-    const date = new Date();
-    switch(dateRange) {
-      case 'week': date.setDate(date.getDate() - 7); break;
-      case 'month': date.setMonth(date.getMonth() - 1); break;
-      case 'quarter': date.setMonth(date.getMonth() - 3); break;
-      case 'year': date.setFullYear(date.getFullYear() - 1); break;
-    }
-    return date.toISOString();
-  };
-
-  const processSalesTrend = (orders) => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const currentMonth = new Date().getMonth();
-    
-    return months.slice(0, currentMonth + 1).map((month, index) => {
-      const monthOrders = orders.filter(order => {
-        if (!order.created_at) return false;
-        const orderDate = new Date(order.created_at);
-        return orderDate.getMonth() === index && orderDate.getFullYear() === new Date().getFullYear();
-      });
-      
-      const revenue = monthOrders.reduce((sum, order) => sum + (order.total_amount || order.total || 0), 0);
-      
-      return {
-        month,
-        revenue,
-        orders: monthOrders.length
-      };
-    });
-  };
-
-  const processTopCustomers = (orders) => {
-    const customerTotals = {};
-    
-    orders.forEach(order => {
-      if (order.customer_id) {
-        if (!customerTotals[order.customer_id]) {
-          customerTotals[order.customer_id] = {
-            id: order.customer_id,
-            name: order.customer_name || 'Unknown',
-            total: 0,
-            orders: 0
-          };
-        }
-        customerTotals[order.customer_id].total += order.total_amount || order.total || 0;
-        customerTotals[order.customer_id].orders += 1;
-      }
-    });
-
-    return Object.values(customerTotals)
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 5);
-  };
-
-  const processServicePerformance = (orders) => {
-    const servicePerformance = {};
-    
-    orders.forEach(order => {
-      if (order.order_items && Array.isArray(order.order_items)) {
-        order.order_items.forEach(item => {
-          const serviceName = item.services?.name || `Service #${item.service_id}`;
-          if (!servicePerformance[serviceName]) {
-            servicePerformance[serviceName] = {
-              name: serviceName,
-              revenue: 0,
-              orders: 0
-            };
-          }
-          servicePerformance[serviceName].revenue += (item.quantity || 1) * (item.price || 0);
-          servicePerformance[serviceName].orders += 1;
-        });
-      }
-    });
-
-    return Object.values(servicePerformance)
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 5);
-  };
-
-  const processRevenueByChannel = (orders) => {
-    const channelRevenue = {};
-    
-    orders.forEach(order => {
-      const channel = order.channel || 'walk-in';
-      if (!channelRevenue[channel]) {
-        channelRevenue[channel] = {
-          channel,
-          revenue: 0,
-          orders: 0
-        };
-      }
-      channelRevenue[channel].revenue += order.total_amount || order.total || 0;
-      channelRevenue[channel].orders += 1;
-    });
-
-    return Object.values(channelRevenue);
-  };
-
-  if (loading) {
-    return (
-      <div style={styles.loadingContainer}>
-        <div style={styles.spinner}></div>
-        <p style={styles.loadingText}>Loading analytics...</p>
-      </div>
-    );
-  }
-
-  return (
-    <div style={styles.screenContainer}>
-      <div style={styles.screenHeader}>
-        <h2 style={styles.screenTitle}>Sales Analytics</h2>
-        <select 
-          value={dateRange} 
-          onChange={(e) => setDateRange(e.target.value)}
-          style={styles.analyticsSelect}
-        >
-          <option value="week">Last 7 Days</option>
-          <option value="month">Last 30 Days</option>
-          <option value="quarter">Last Quarter</option>
-          <option value="year">Last Year</option>
-        </select>
-      </div>
-
-      <div style={styles.analyticsGrid}>
-        <div style={styles.analyticsCard}>
-          <h3 style={styles.analyticsTitle}>Sales Trend</h3>
-          <div style={styles.chartPlaceholder}>
-            <FaChartLine size={48} color="#d1d5db" />
-            <p>Revenue: ₱{analyticsData.salesTrend.reduce((sum, item) => sum + item.revenue, 0).toLocaleString()}</p>
-            <p>Orders: {analyticsData.salesTrend.reduce((sum, item) => sum + item.orders, 0)}</p>
-          </div>
-        </div>
-
-        <div style={styles.analyticsCard}>
-          <h3 style={styles.analyticsTitle}>Top Customers</h3>
-          <div style={styles.chartPlaceholder}>
-            <FaUsers size={48} color="#d1d5db" />
-            {analyticsData.topCustomers.slice(0, 3).map((customer, index) => (
-              <div key={index} style={{ marginBottom: '8px' }}>
-                <div>{customer.name}</div>
-                <small>₱{customer.total.toLocaleString()}</small>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div style={styles.analyticsCard}>
-          <h3 style={styles.analyticsTitle}>Service Performance</h3>
-          <div style={styles.chartPlaceholder}>
-            <FaTools size={48} color="#d1d5db" />
-            {analyticsData.servicePerformance.slice(0, 3).map((service, index) => (
-              <div key={index} style={{ marginBottom: '8px' }}>
-                <div>{service.name}</div>
-                <small>₱{service.revenue.toLocaleString()}</small>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div style={styles.analyticsCard}>
-          <h3 style={styles.analyticsTitle}>Revenue by Channel</h3>
-          <div style={styles.chartPlaceholder}>
-            <FaShoppingBag size={48} color="#d1d5db" />
-            {analyticsData.revenueByChannel.map((channel, index) => (
-              <div key={index} style={{ marginBottom: '8px' }}>
-                <div>{channel.channel}</div>
-                <small>₱{channel.revenue.toLocaleString()}</small>
-              </div>
-            ))}
-          </div>
-        </div>
+        {activeTab === 'bookings' && <BookingManagement />}
+        
       </div>
     </div>
   );
-};
-
-// ====================
-// HELPER FUNCTIONS
-// ====================
-const getStatusColor = (status) => {
-  switch (status?.toLowerCase()) {
-    case 'pending':
-      return { background: '#fef3c7', color: '#92400e' };
-    case 'confirmed':
-      return { background: '#dbeafe', color: '#1e40af' };
-    case 'in_progress':
-      return { background: '#f0f9ff', color: '#0369a1' };
-    case 'completed':
-      return { background: '#d1fae5', color: '#065f46' };
-    case 'cancelled':
-      return { background: '#fee2e2', color: '#991b1b' };
-    default:
-      return { background: '#f3f4f6', color: '#6b7280' };
-  }
-};
-
-const getCategoryColor = (category) => {
-  switch (category) {
-    case 'maintenance':
-      return 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)';
-    case 'repair':
-      return 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
-    case 'tires':
-      return 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
-    case 'car_wash':
-      return 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)';
-    case 'inspection':
-      return 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
-    default:
-      return 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)';
-  }
 };
 
 // ====================
 // STYLES
 // ====================
 const styles = {
-
-
-  
   container: {
     background: '#f8fafc',
     minHeight: '100vh',
@@ -2262,18 +2577,6 @@ const styles = {
     display: 'flex',
     gap: '16px',
     alignItems: 'center',
-  },
-  notificationBadge: {
-    background: '#ef4444',
-    color: 'white',
-    borderRadius: '50%',
-    width: '24px',
-    height: '24px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '12px',
-    fontWeight: 'bold',
   },
   tabContainer: {
     display: 'flex',
@@ -2330,19 +2633,10 @@ const styles = {
     padding: '100px 20px',
     textAlign: 'center',
   },
-  spinner: {
-    width: '60px',
-    height: '60px',
-    border: '4px solid #e5e7eb',
-    borderTop: '4px solid #0077b6',
-    borderRadius: '50%',
-    animation: 'spin 1s linear infinite',
-    marginBottom: '20px',
-  },
   loadingText: {
     fontSize: '16px',
     color: '#6b7280',
-    margin: 0,
+    margin: '20px 0 0 0',
   },
   // Dashboard Styles
   dashboard: {
@@ -2396,9 +2690,6 @@ const styles = {
     alignItems: 'center',
     gap: '8px',
     transition: 'all 0.2s',
-    ':hover': {
-      background: '#e5e7eb',
-    },
   },
   todayStats: {
     display: 'grid',
@@ -2447,10 +2738,6 @@ const styles = {
     gap: '20px',
     border: '1px solid #f1f5f9',
     transition: 'transform 0.2s, box-shadow 0.2s',
-    ':hover': {
-      transform: 'translateY(-4px)',
-      boxShadow: '0 12px 24px rgba(0, 0, 0, 0.1)',
-    },
   },
   kpiIcon: {
     width: '60px',
@@ -2494,9 +2781,6 @@ const styles = {
     border: '1px solid #f1f5f9',
     overflow: 'hidden',
     transition: 'transform 0.2s',
-    ':hover': {
-      transform: 'translateY(-2px)',
-    },
   },
   chartHeader: {
     padding: '24px 24px 0',
@@ -2583,9 +2867,6 @@ const styles = {
     background: '#f8fafc',
     borderRadius: '12px',
     transition: 'background 0.2s',
-    ':hover': {
-      background: '#f1f5f9',
-    },
   },
   serviceRank: {
     width: '36px',
@@ -2607,10 +2888,7 @@ const styles = {
     color: '#1e293b',
     marginBottom: '6px',
     fontSize: '15px',
-  },
-  serviceStats: {
-    fontSize: '13px',
-    color: '#64748b',
+  
   },
   serviceOrders: {
     background: '#e0f2fe',
@@ -2639,7 +2917,7 @@ const styles = {
   },
   tableHeader: {
     display: 'grid',
-    gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr 1fr',
+    gridTemplateColumns: 'repeat(6, 1fr)',
     padding: '16px',
     background: '#f8fafc',
     borderRadius: '12px',
@@ -2650,17 +2928,11 @@ const styles = {
   },
   tableRow: {
     display: 'grid',
-    gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr 1fr',
+    gridTemplateColumns: 'repeat(6, 1fr)',
     padding: '16px',
     borderBottom: '1px solid #f1f5f9',
     alignItems: 'center',
     transition: 'background 0.2s',
-    ':hover': {
-      background: '#f8fafc',
-    },
-    ':last-child': {
-      borderBottom: 'none',
-    },
   },
   tableCell: {
     padding: '8px 12px',
@@ -2707,10 +2979,6 @@ const styles = {
     fontSize: '14px',
     fontWeight: '500',
     transition: 'all 0.2s',
-    ':hover': {
-      background: '#0077b6',
-      color: 'white',
-    },
   },
   // Screen Container Styles
   screenContainer: {
@@ -2740,39 +3008,6 @@ const styles = {
     gap: '16px',
     alignItems: 'center',
   },
-  filterToggleButton: {
-    background: '#f8fafc',
-    color: '#475569',
-    border: '1px solid #e2e8f0',
-    padding: '10px 20px',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '500',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    transition: 'all 0.2s',
-    ':hover': {
-      background: '#f1f5f9',
-    },
-  },
-  viewToggle: {
-    display: 'flex',
-    gap: '4px',
-    background: '#f8fafc',
-    padding: '4px',
-    borderRadius: '8px',
-  },
-  viewButton: {
-    background: 'transparent',
-    border: 'none',
-    padding: '10px 14px',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '16px',
-    transition: 'all 0.2s',
-  },
   exportButton: {
     background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
     color: 'white',
@@ -2786,10 +3021,6 @@ const styles = {
     gap: '8px',
     fontSize: '14px',
     transition: 'transform 0.2s, box-shadow 0.2s',
-    ':hover': {
-      transform: 'translateY(-2px)',
-      boxShadow: '0 8px 16px rgba(16, 185, 129, 0.2)',
-    },
   },
   filtersPanel: {
     background: '#f8fafc',
@@ -2802,9 +3033,6 @@ const styles = {
     display: 'flex',
     gap: '24px',
     marginBottom: '20px',
-    ':last-child': {
-      marginBottom: 0,
-    },
   },
   filterGroup: {
     flex: 1,
@@ -2825,33 +3053,6 @@ const styles = {
     background: 'white',
     cursor: 'pointer',
     transition: 'border 0.2s',
-    ':focus': {
-      outline: 'none',
-      borderColor: '#0077b6',
-      boxShadow: '0 0 0 3px rgba(0, 119, 182, 0.1)',
-    },
-  },
-  dateRange: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-  },
-  dateInput: {
-    flex: 1,
-    padding: '10px 12px',
-    border: '1px solid #e2e8f0',
-    borderRadius: '8px',
-    fontSize: '14px',
-    background: 'white',
-    transition: 'border 0.2s',
-    ':focus': {
-      outline: 'none',
-      borderColor: '#0077b6',
-    },
-  },
-  dateSeparator: {
-    color: '#94a3b8',
-    fontSize: '14px',
   },
   searchGroup: {
     flex: 2,
@@ -2873,11 +3074,6 @@ const styles = {
     fontSize: '14px',
     background: 'white',
     transition: 'border 0.2s',
-    ':focus': {
-      outline: 'none',
-      borderColor: '#0077b6',
-      boxShadow: '0 0 0 3px rgba(0, 119, 182, 0.1)',
-    },
   },
   clearButton: {
     background: '#f1f5f9',
@@ -2889,208 +3085,8 @@ const styles = {
     fontSize: '14px',
     fontWeight: '500',
     transition: 'all 0.2s',
-    ':hover': {
-      background: '#e2e8f0',
-    },
   },
-  ordersGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))',
-    gap: '24px',
-  },
-  orderCard: {
-    background: 'white',
-    borderRadius: '16px',
-    border: '1px solid #f1f5f9',
-    overflow: 'hidden',
-    transition: 'transform 0.2s, box-shadow 0.2s',
-    ':hover': {
-      transform: 'translateY(-4px)',
-      boxShadow: '0 12px 24px rgba(0, 0, 0, 0.08)',
-    },
-  },
-  orderCardHeader: {
-    padding: '24px 24px 16px',
-    borderBottom: '1px solid #f1f5f9',
-  },
-  orderCardTitle: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '12px',
-  },
-  orderId: {
-    fontSize: '18px',
-    fontWeight: '700',
-    color: '#1e293b',
-    margin: 0,
-  },
-  orderStatus: {
-    padding: '6px 12px',
-    borderRadius: '20px',
-    fontSize: '12px',
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  orderCardChannel: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    fontSize: '13px',
-    color: '#64748b',
-  },
-  orderCardBody: {
-    padding: '16px 24px',
-  },
-  orderCustomer: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    marginBottom: '20px',
-  },
-  customerName: {
-    fontWeight: '600',
-    color: '#1e293b',
-    fontSize: '15px',
-  },
-  customerPhone: {
-    fontSize: '13px',
-    color: '#64748b',
-  },
-  orderDetails: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(2, 1fr)',
-    gap: '12px',
-    marginBottom: '20px',
-  },
-  orderDetail: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-  },
-  detailLabel: {
-    fontSize: '12px',
-    color: '#94a3b8',
-  },
-  detailValue: {
-    fontSize: '14px',
-    color: '#475569',
-    fontWeight: '500',
-  },
-  orderTotal: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: '16px',
-    borderTop: '1px solid #f1f5f9',
-  },
-  totalLabel: {
-    fontSize: '14px',
-    color: '#64748b',
-  },
-  totalAmount: {
-    fontSize: '20px',
-    fontWeight: '700',
-    color: '#0077b6',
-  },
-  orderCardActions: {
-    padding: '20px 24px',
-    background: '#f8fafc',
-    borderTop: '1px solid #f1f5f9',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  viewDetailsButton: {
-    background: 'transparent',
-    color: '#475569',
-    border: '1px solid #e2e8f0',
-    padding: '8px 16px',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '500',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    transition: 'all 0.2s',
-    ':hover': {
-      background: '#f1f5f9',
-    },
-  },
-  statusActions: {
-    display: 'flex',
-    gap: '8px',
-  },
-  confirmButton: {
-    background: '#10b981',
-    color: 'white',
-    border: 'none',
-    padding: '8px 16px',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: '500',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    transition: 'all 0.2s',
-    ':hover': {
-      background: '#059669',
-    },
-  },
-  cancelButton: {
-    background: '#ef4444',
-    color: 'white',
-    border: 'none',
-    padding: '8px 16px',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: '500',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    transition: 'all 0.2s',
-    ':hover': {
-      background: '#dc2626',
-    },
-  },
-  progressButton: {
-    background: '#f59e0b',
-    color: 'white',
-    border: 'none',
-    padding: '8px 16px',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: '500',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    transition: 'all 0.2s',
-    ':hover': {
-      background: '#d97706',
-    },
-  },
-  completeButton: {
-    background: '#0077b6',
-    color: 'white',
-    border: 'none',
-    padding: '8px 16px',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: '500',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    transition: 'all 0.2s',
-    ':hover': {
-      background: '#0369a1',
-    },
-  },
-  ordersTable: {
+  ordersTableContainer: {
     overflowX: 'auto',
     borderRadius: '12px',
     border: '1px solid #f1f5f9',
@@ -3112,40 +3108,24 @@ const styles = {
   tr: {
     borderBottom: '1px solid #f1f5f9',
     transition: 'background 0.2s',
-    ':hover': {
-      background: '#f8fafc',
-    },
   },
   td: {
     padding: '16px',
     fontSize: '14px',
     color: '#475569',
   },
-  customerCell: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
+  customerName: {
+    fontWeight: '600',
+    color: '#1e293b',
+    fontSize: '14px',
+  },
+  customerEmail: {
+    fontSize: '13px',
+    color: '#64748b',
   },
   amount: {
     fontWeight: '600',
     color: '#0077b6',
-  },
-  tableActionButton: {
-    background: 'transparent',
-    color: '#475569',
-    border: '1px solid #e2e8f0',
-    padding: '6px 12px',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: '500',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    transition: 'all 0.2s',
-    ':hover': {
-      background: '#f1f5f9',
-    },
   },
   modalOverlay: {
     position: 'fixed',
@@ -3185,176 +3165,6 @@ const styles = {
     cursor: 'pointer',
     color: '#94a3b8',
     transition: 'color 0.2s',
-    ':hover': {
-      color: '#475569',
-    },
-  },
-  modalContent: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '24px',
-  },
-  orderInfoGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(2, 1fr)',
-    gap: '24px',
-  },
-  infoGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-  },
-  infoTitle: {
-    fontSize: '16px',
-    fontWeight: '600',
-    color: '#1e293b',
-    margin: '0 0 8px 0',
-  },
-  infoRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '8px 0',
-    borderBottom: '1px solid #f1f5f9',
-  },
-  infoLabel: {
-    fontSize: '14px',
-    color: '#64748b',
-  },
-  infoValue: {
-    fontSize: '14px',
-    color: '#1e293b',
-    fontWeight: '500',
-  },
-  itemsSection: {
-    paddingTop: '24px',
-    borderTop: '1px solid #e2e8f0',
-  },
-  sectionTitle: {
-    fontSize: '16px',
-    fontWeight: '600',
-    color: '#1e293b',
-    margin: '0 0 16px 0',
-  },
-  itemsTable: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-  },
-  itemRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '16px',
-    background: '#f8fafc',
-    borderRadius: '12px',
-  },
-  itemInfo: {
-    flex: 2,
-  },
-  itemName: {
-    fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: '4px',
-  },
-  itemDescription: {
-    fontSize: '13px',
-    color: '#64748b',
-  },
-  itemDetails: {
-    flex: 1,
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  itemQuantity: {
-    fontSize: '14px',
-    color: '#475569',
-  },
-  itemPrice: {
-    fontSize: '14px',
-    color: '#475569',
-  },
-  itemTotal: {
-    fontSize: '16px',
-    fontWeight: '600',
-    color: '#0077b6',
-  },
-  totalSection: {
-    paddingTop: '24px',
-    borderTop: '1px solid #e2e8f0',
-  },
-  totalRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '8px 0',
-  },
-  totalLabel: {
-    fontSize: '14px',
-    color: '#64748b',
-  },
-  totalValue: {
-    fontSize: '16px',
-    color: '#1e293b',
-    fontWeight: '500',
-  },
-  modalActions: {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    gap: '12px',
-    paddingTop: '24px',
-    borderTop: '1px solid #e2e8f0',
-  },
-  printButton: {
-    background: '#475569',
-    color: 'white',
-    border: 'none',
-    padding: '12px 24px',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '500',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    transition: 'all 0.2s',
-    ':hover': {
-      background: '#334155',
-    },
-  },
-  closeModalButton: {
-    background: '#0077b6',
-    color: 'white',
-    border: 'none',
-    padding: '12px 24px',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '500',
-    transition: 'all 0.2s',
-    ':hover': {
-      background: '#0369a1',
-    },
-  },
-  // Services Screen Styles
-  addButton: {
-    background: 'linear-gradient(135deg, #0077b6 0%, #00b4d8 100%)',
-    color: 'white',
-    border: 'none',
-    padding: '12px 24px',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontWeight: '600',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    fontSize: '14px',
-    transition: 'transform 0.2s, box-shadow 0.2s',
-    ':hover': {
-      transform: 'translateY(-2px)',
-      boxShadow: '0 8px 16px rgba(0, 119, 182, 0.2)',
-    },
   },
   form: {
     display: 'flex',
@@ -3382,11 +3192,6 @@ const styles = {
     borderRadius: '8px',
     fontSize: '14px',
     transition: 'border 0.2s',
-    ':focus': {
-      outline: 'none',
-      borderColor: '#0077b6',
-      boxShadow: '0 0 0 3px rgba(0, 119, 182, 0.1)',
-    },
   },
   formTextarea: {
     padding: '12px',
@@ -3396,16 +3201,22 @@ const styles = {
     resize: 'vertical',
     minHeight: '80px',
     transition: 'border 0.2s',
-    ':focus': {
-      outline: 'none',
-      borderColor: '#0077b6',
-      boxShadow: '0 0 0 3px rgba(0, 119, 182, 0.1)',
-    },
   },
   formActions: {
     display: 'flex',
     justifyContent: 'flex-end',
     gap: '12px',
+  },
+  cancelButton: {
+    background: 'transparent',
+    color: '#475569',
+    border: '1px solid #e2e8f0',
+    padding: '12px 24px',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500',
+    transition: 'all 0.2s',
   },
   submitButton: {
     background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
@@ -3417,10 +3228,21 @@ const styles = {
     fontSize: '14px',
     fontWeight: '500',
     transition: 'all 0.2s',
-    ':hover': {
-      transform: 'translateY(-2px)',
-      boxShadow: '0 8px 16px rgba(16, 185, 129, 0.2)',
-    },
+  },
+  // Services Screen Styles
+  addButton: {
+    background: 'linear-gradient(135deg, #0077b6 0%, #00b4d8 100%)',
+    color: 'white',
+    border: 'none',
+    padding: '12px 24px',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontWeight: '600',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    fontSize: '14px',
+    transition: 'transform 0.2s, box-shadow 0.2s',
   },
   servicesGrid: {
     display: 'grid',
@@ -3433,10 +3255,6 @@ const styles = {
     border: '1px solid #f1f5f9',
     overflow: 'hidden',
     transition: 'transform 0.2s, box-shadow 0.2s',
-    ':hover': {
-      transform: 'translateY(-4px)',
-      boxShadow: '0 12px 24px rgba(0, 0, 0, 0.08)',
-    },
   },
   serviceCardHeader: {
     padding: '24px 24px 16px',
@@ -3541,9 +3359,6 @@ const styles = {
     alignItems: 'center',
     gap: '6px',
     transition: 'all 0.2s',
-    ':hover': {
-      background: '#f1f5f9',
-    },
   },
   deactivateButton: {
     background: '#fef2f2',
@@ -3555,9 +3370,6 @@ const styles = {
     fontSize: '13px',
     fontWeight: '500',
     transition: 'all 0.2s',
-    ':hover': {
-      background: '#fee2e2',
-    },
   },
   activateButton: {
     background: '#f0fdf4',
@@ -3569,81 +3381,6 @@ const styles = {
     fontSize: '13px',
     fontWeight: '500',
     transition: 'all 0.2s',
-    ':hover': {
-      background: '#dcfce7',
-    },
-  },
-  // Customers Screen Styles
-  customersTable: {
-    background: 'white',
-    borderRadius: '16px',
-    border: '1px solid #f1f5f9',
-    overflow: 'hidden',
-  },
-  customerAvatar: {
-    width: '40px',
-    height: '40px',
-    borderRadius: '12px',
-    background: 'linear-gradient(135deg, #0077b6 0%, #00b4d8 100%)',
-    color: 'white',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontWeight: 'bold',
-    fontSize: '16px',
-  },
-  customerName: {
-    fontWeight: '600',
-    color: '#1e293b',
-    fontSize: '14px',
-  },
-  customerEmail: {
-    fontSize: '13px',
-    color: '#64748b',
-  },
-  contactCell: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-  },
-  contactPhone: {
-    fontSize: '14px',
-    color: '#1e293b',
-    fontWeight: '500',
-  },
-  contactAddress: {
-    fontSize: '13px',
-    color: '#64748b',
-  },
-  orderCount: {
-    background: '#e0f2fe',
-    color: '#0369a1',
-    padding: '6px 12px',
-    borderRadius: '20px',
-    fontSize: '13px',
-    fontWeight: '600',
-  },
-  totalSpent: {
-    fontWeight: '600',
-    color: '#0077b6',
-    fontSize: '15px',
-  },
-  viewCustomerButton: {
-    background: 'transparent',
-    color: '#475569',
-    border: '1px solid #e2e8f0',
-    padding: '8px 16px',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: '500',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    transition: 'all 0.2s',
-    ':hover': {
-      background: '#f1f5f9',
-    },
   },
   // Booking Management Styles
   statsGrid: {
@@ -3667,6 +3404,26 @@ const styles = {
     gap: '8px',
     alignItems: 'center',
   },
+  confirmButton: {
+    background: '#10b981',
+    color: 'white',
+    border: 'none',
+    padding: '6px 10px',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '12px',
+    transition: 'all 0.2s',
+  },
+  completeButton: {
+    background: '#0077b6',
+    color: 'white',
+    border: 'none',
+    padding: '6px 10px',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '12px',
+    transition: 'all 0.2s',
+  },
   cancelButtonSmall: {
     background: '#fef2f2',
     color: '#dc2626',
@@ -3676,9 +3433,6 @@ const styles = {
     cursor: 'pointer',
     fontSize: '12px',
     transition: 'all 0.2s',
-    ':hover': {
-      background: '#fee2e2',
-    },
   },
   deleteButton: {
     background: '#f3f4f6',
@@ -3689,9 +3443,6 @@ const styles = {
     cursor: 'pointer',
     fontSize: '12px',
     transition: 'all 0.2s',
-    ':hover': {
-      background: '#e5e7eb',
-    },
   },
   // Analytics Screen Styles
   analyticsSelect: {
@@ -3702,10 +3453,6 @@ const styles = {
     background: 'white',
     cursor: 'pointer',
     transition: 'border 0.2s',
-    ':focus': {
-      outline: 'none',
-      borderColor: '#0077b6',
-    },
   },
   analyticsGrid: {
     display: 'grid',
@@ -3724,77 +3471,30 @@ const styles = {
     fontWeight: '600',
     color: '#1e293b',
     margin: '0 0 20px 0',
+ 
   },
-  chartPlaceholder: {
+  categoryInfo: {
     display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '40px 20px',
-    background: '#f8fafc',
-    borderRadius: '12px',
-    textAlign: 'center',
-    gap: '16px',
-    color: '#6b7280',
-    fontSize: '14px',
+    justifyContent: 'space-between',
+    marginBottom: '8px',
   },
-  // Table Styles
-  tableHeader: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr 1fr',
-    padding: '16px',
-    background: '#f8fafc',
+  categoryName: {
+    fontSize: '14px',
+    fontWeight: '500',
+    color: '#1e293b',
+  },
+  categoryRevenue: {
+    fontSize: '14px',
     fontWeight: '600',
-    color: '#475569',
-    fontSize: '14px',
+    color: '#0077b6',
   },
-  tableRow: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr 1fr',
-    padding: '16px',
-    borderBottom: '1px solid #f1f5f9',
-    alignItems: 'center',
-    ':last-child': {
-      borderBottom: 'none',
-    },
+  progressBar: {
+    width: '100%',
+    height: '8px',
+    background: '#f1f5f9',
+    borderRadius: '4px',
+    overflow: 'hidden',
   },
 };
-
-// Add CSS animations
-const style = document.createElement('style');
-style.innerHTML = `
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-  
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  
-  @keyframes slideIn {
-    from { transform: translateX(-20px); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
-  }
-  
-  * {
-    box-sizing: border-box;
-  }
-  
-  body {
-    margin: 0;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  }
-  
-  button {
-    font-family: inherit;
-  }
-  
-  input, select, textarea {
-    font-family: inherit;
-  }
-`;
-document.head.appendChild(style);
 
 export default SalesManagement;

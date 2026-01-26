@@ -85,34 +85,71 @@ const OrderManagement = () => {
   // ====================
   // API FUNCTIONS
   // ====================
-  const fetchOrders = async () => {
+const fetchOrders = async () => {
   try {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('orders')
+
+     const { data: viewData, error: viewError } = await supabase
+      .from('orders_with_emails')
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (!viewError && viewData) {
+      // Process view data
+      const formattedOrders = viewData.map(order => ({
+        id: order.id,
+        customer_name: order.display_name || order.customer_name || (order.order_source === 'app-user' ? 'Registered User' : 'Walk-in Customer'),
+        customer_email: order.display_email,
+        customer_phone: order.customer_phone || 'No phone',
+        total: order.total || order.total_amount || 0,
+        status: order.status || 'pending',
+        payment_method: order.payment_method || 'cash',
+        channel: order.order_source === 'app-user' ? 'mobile' : 'walk-in',
+        created_at: order.created_at,
+        user_id: order.user_id,
+        order_source: order.order_source
+      }));
+      
+      setOrders(formattedOrders);
+      return;
+    }
     
-    // Map to expected structure
-    const mappedOrders = (data || []).map(order => ({
-      ...order,
-      customer_name: order.customer_name || 'Walk-in Customer',
-      customer_phone: order.customer_phone || 'N/A',
-      customer_email: order.customer_email || '',
-      channel: order.channel || 'walk-in',
-      total: order.total_amount || 0,
-      order_items: [] // Empty array since you don't have this table yet
+    // If view fails, try manual fetch
+    console.log('View not available, fetching manually...');
+    
+    const { data: ordersData, error: ordersError } = await supabase
+      .from('orders')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (ordersError) throw ordersError;
+    
+    // Simple formatting without profile join
+    const formattedOrders = ordersData.map(order => ({
+      id: order.id,
+      customer_name: order.customer_name || (order.user_id ? 'Registered User' : 'Walk-in Customer'),
+      customer_email: order.user_id ? 'App User (email in profile)' : 'No account',
+      customer_phone: order.customer_phone || 'No phone',
+      total: order.total || order.total_amount || 0,
+      status: order.status || 'pending',
+      payment_method: order.payment_method || 'cash',
+      channel: order.user_id ? 'mobile' : 'walk-in',
+      created_at: order.created_at,
+      user_id: order.user_id
     }));
     
-    setOrders(mappedOrders);
+    setOrders(formattedOrders);
+    
   } catch (error) {
     console.error('Error fetching orders:', error);
+    alert('Error loading orders: ' + error.message);
+    setOrders([]);
   } finally {
     setLoading(false);
   }
 };
+
+
 
   const updateOrderStatus = async (orderId, status) => {
     try {

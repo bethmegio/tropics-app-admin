@@ -248,8 +248,8 @@ const ActivityLog = () => {
         return <FaBoxOpen {...iconProps} />;
       case type.includes('inventory_') || type.includes('stock_'):
         return <FaBoxOpen {...iconProps} />;
-      case type.includes('settings_') || type.includes('backup_'):
-        return <FaCog {...iconProps} />;
+     
+  
       case type.includes('report_'):
         return <FaHistory {...iconProps} />;
       default:
@@ -344,7 +344,7 @@ const ActivityLog = () => {
           metadata: { 
             details: 'Updated email notification settings',
             changed_by: user.email,
-            settings_changed: ['smtp_server', 'notification_frequency']
+          
           }
         },
         {

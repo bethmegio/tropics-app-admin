@@ -5,10 +5,29 @@ export default function Sidebar() {
   const location = useLocation()
 
   const navItems = [
-    { name: '🏠 Home', path: '/dashboard' },
-    { name: '📦 Manage Products', path: '/dashboard/products' },
-    { name: '👥 Users', path: '/dashboard/users' },
-    { name: '⚙️ Settings', path: '/dashboard/settings' }
+        { 
+        name: '🏠 Home', 
+        path: '/dashboard',
+        icon: <FaHome size={20} />  // Add FaHome import at top
+    },
+    { 
+        name: '📦 Manage Products', 
+        path: '/dashboard/products',
+        icon: <FaBox size={20} />  // Add FaBox import
+    },
+    { 
+        name: '👥 Users', 
+        path: '/dashboard/users',
+        icon: <FaUsers size={20} />  // Add FaUsers import
+    },
+    { 
+        name: '📊 Reports',
+        path: '/dashboard/reports',
+        icon: <FaChartLine size={20} />,
+        notification: 0
+    },
+   
+    
   ]
 
   return (
